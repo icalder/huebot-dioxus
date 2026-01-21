@@ -5,7 +5,7 @@ pub mod client;
 pub mod tests;
 
 #[cfg(feature = "server")]
-static HUE_CLIENT: LazyLock<client::Client> = LazyLock::new(|| {
+static HUE_CLIENT: LazyLock<client::ClientEx> = LazyLock::new(|| {
     let ip = "192.168.1.107";
     let key = "yAqYgN-3scCv858Ed5YIvWqONSSBo-7IMOUIuqNE";
 
@@ -21,10 +21,11 @@ static HUE_CLIENT: LazyLock<client::Client> = LazyLock::new(|| {
         .build()
         .unwrap();
 
-    client::Client::new_with_client(&format!("https://{}", ip), reqwest_client)
+    let client = client::Client::new_with_client(&format!("https://{}", ip), reqwest_client);
+    client::ClientEx::new(client)
 });
 
 #[cfg(feature = "server")]
-pub fn get_hue_client() -> &'static client::Client {
+pub fn get_hue_client() -> &'static client::ClientEx {
     &HUE_CLIENT
 }
