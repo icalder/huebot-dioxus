@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"], optional = true }
 futures = "0.3"
 progenitor = { git = "https://github.com/oxidecomputer/progenitor" }
 reqwest = { version = "0.13", features = ["json", "query", "stream"] }

@@ -47,6 +47,30 @@ const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 fn main() {
     // The `launch` function is the main entry point for a dioxus app. It takes a component and renders it with the platform feature
     // you have enabled
+    #[cfg(feature = "server")]
+    std::thread::spawn(|| {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigterm = signal(SignalKind::terminate()).unwrap();
+            let mut sigint = signal(SignalKind::interrupt()).unwrap();
+            
+            tokio::select! {
+                _ = sigterm.recv() => {
+                    println!("Received SIGTERM, shutting down...");
+                    std::process::exit(0);
+                }
+                _ = sigint.recv() => {
+                    println!("Received SIGINT, shutting down...");
+                    std::process::exit(0);
+                }
+            }
+        });
+    });
+
     dioxus::launch(App);
 }
 
