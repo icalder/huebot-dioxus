@@ -65,6 +65,28 @@ NB: `nix-shell -p wslu` to get `wslview`.
 
 `cargo test hue::tests -- --nocapture`
 
+### Container Build & Run
+
+You can build a container image for the application using Nix. This creates a layered image that can be loaded into Podman or Docker.
+
+1.  **Build the image:**
+    ```bash
+    nix build .#docker
+    ```
+    This will produce a `result` symlink pointing to the tarball of the image.
+
+2.  **Load the image into Podman:**
+    ```bash
+    podman load < result
+    ```
+    The image will be tagged as `huebot:latest`.
+
+3.  **Run the container:**
+    ```bash
+    podman run -p 8080:8080 huebot:latest
+    ```
+    The application will be accessible at `http://localhost:8080`.
+
 ### TODO
 
   Here is a summary of the changes:
