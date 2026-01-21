@@ -57,11 +57,14 @@
           '';
 
           installPhase = ''
-            mkdir -p $out/bin $out/public
+            mkdir -p $out/bin
             
             # The binary is named after the package name 'huebot'
             cp target/dx/huebot/release/web/huebot $out/bin/huebot
-            cp -r target/dx/huebot/release/web/public/* $out/public/
+            
+            # Dioxus server expects 'public' folder to be next to the executable
+            mkdir -p $out/bin/public
+            cp -r target/dx/huebot/release/web/public/* $out/bin/public/
           '';
           
           doCheck = false;
@@ -73,11 +76,11 @@
           copyToRoot = pkgs.buildEnv {
              name = "image-root";
              paths = [ huebot pkgs.cacert ];
-             pathsToLink = [ "/bin" "/public" ];
+             pathsToLink = [ "/bin" ];
           };
           config = {
             Cmd = [ "${huebot}/bin/huebot" ];
-            WorkingDir = "${huebot}";
+            WorkingDir = "${huebot}/bin";
             ExposedPorts = {
               "8080/tcp" = {};
             };
