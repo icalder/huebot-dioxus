@@ -62,6 +62,9 @@
             # The binary is named after the package name 'huebot'
             cp target/dx/huebot/release/web/huebot $out/bin/huebot
             
+            # Strip the binary to remove debug symbols
+            $STRIP $out/bin/huebot
+            
             # Dioxus server expects 'public' folder to be next to the executable
             mkdir -p $out/bin/public
             cp -r target/dx/huebot/release/web/public/* $out/bin/public/
