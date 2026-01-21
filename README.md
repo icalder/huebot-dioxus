@@ -83,7 +83,7 @@ You can build a container image for the application using Nix. This creates a la
 
 3.  **Run the container:**
     ```bash
-    podman run -p 8080:8080 huebot:latest
+    podman run --rm -p 8080:8080 huebot:latest
     ```
     The application will be accessible at `http://localhost:8080`.
 
