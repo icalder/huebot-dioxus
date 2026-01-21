@@ -27,9 +27,13 @@
             (builtins.match ".*/tailwind\.css$" path != null);
         };
 
+        # Explicitly define vendor dependencies so we can reference them
+        vendor = craneLib.vendorCargoDeps { inherit src; };
+
         commonArgs = {
           inherit src;
           strictDeps = true;
+          cargoVendorDir = vendor;
           nativeBuildInputs = with pkgs; [
             pkg-config
             dioxus-cli
@@ -53,6 +57,12 @@
           # We use dx bundle instead of the default cargo build
           buildPhase = ''
             export HOME=$(mktemp -d)
+            
+            # Remap path prefixes to remove references to the Rust toolchain, vendor deps, and artifacts
+            # This is critical for reducing the Docker image size
+            export RUSTFLAGS="--remap-path-prefix ${toolchain}=/rust-toolchain --remap-path-prefix ${vendor}=/vendor --remap-path-prefix ${cargoArtifacts}=/cargo-deps --remap-path-prefix ${src}=/source"
+            echo "Using RUSTFLAGS: $RUSTFLAGS"
+            
             dx bundle --platform web --release
           '';
 
