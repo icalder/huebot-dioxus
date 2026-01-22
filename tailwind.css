@@ -1,1 +1,10 @@
 @import "tailwindcss";
+@source "./src/**/*.{rs,html,css}";
+
+
+
+@layer base {
+  body {
+    @apply bg-[#0f1116] text-white p-5 font-sans;
+  }
+}

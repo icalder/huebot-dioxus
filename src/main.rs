@@ -41,7 +41,6 @@ enum Route {
 // The macro returns an `Asset` type that will display as the path to the asset in the browser or a local path in desktop bundles.
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 // The asset macro also minifies some assets like CSS and JS to make bundled smaller
-const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
 
 fn main() {
@@ -57,7 +56,7 @@ fn main() {
             use tokio::signal::unix::{signal, SignalKind};
             let mut sigterm = signal(SignalKind::terminate()).unwrap();
             let mut sigint = signal(SignalKind::interrupt()).unwrap();
-            
+
             tokio::select! {
                 _ = sigterm.recv() => {
                     println!("Received SIGTERM, shutting down...");
@@ -85,7 +84,6 @@ fn App() -> Element {
         // In addition to element and text (which we will see later), rsx can contain other components. In this case,
         // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
         document::Link { rel: "icon", href: FAVICON }
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
         document::Link { rel: "stylesheet", href: TAILWIND_CSS }
 
         // The router component renders the route enum we defined above. It will handle synchronization of the URL and render

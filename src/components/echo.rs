@@ -1,7 +1,5 @@
 use dioxus::prelude::*;
 
-const ECHO_CSS: Asset = asset!("/assets/styling/echo.css");
-
 /// Echo component that demonstrates fullstack server functions.
 #[component]
 pub fn Echo() -> Element {
@@ -13,12 +11,15 @@ pub fn Echo() -> Element {
     let mut response = use_signal(|| String::new());
 
     rsx! {
-        document::Link { rel: "stylesheet", href: ECHO_CSS }
-
         div {
             id: "echo",
-            h4 { "ServerFn Echo" }
+            class: "w-[360px] mx-auto mt-[50px] bg-[#1e222d] p-5 rounded-[10px]",
+            h4 {
+                class: "mb-[15px]",
+                "ServerFn Echo"
+            }
             input {
+                class: "border-none border-b border-white bg-transparent text-white transition-colors duration-200 outline-none block pb-[5px] w-full focus:border-[#6d85c6]",
                 placeholder: "Type here to echo...",
                 // `oninput` is an event handler that will run when the input changes. It can return either nothing or a future
                 // that will be run when the event runs.
@@ -36,6 +37,7 @@ pub fn Echo() -> Element {
             // Signals can be called like a function to clone the current value of the signal
             if !response().is_empty() {
                 p {
+                    class: "mt-5 ml-auto",
                     "Server echoed: "
                     // Since we read the signal inside this component, the component "subscribes" to the signal. Whenever
                     // the signal changes, the component will rerun.
