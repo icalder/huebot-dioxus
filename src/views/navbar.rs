@@ -18,7 +18,16 @@ pub fn Navbar() -> Element {
         // The `Outlet` component is used to render the next component inside the layout. In this case, it will render either
         // the [`Home`] or [`Blog`] component depending on the current route.
         SuspenseBoundary {
-            fallback: move |_| rsx! { "Loading..." },
+            fallback: move |_| rsx! {
+                div {
+                    width: "100%",
+                    height: "100%",
+                    display: "flex",
+                    align_items: "center",
+                    justify_content: "center",
+                    "Loading..."
+                }
+            },
             Outlet::<Route> {}
         }
     }

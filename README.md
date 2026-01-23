@@ -43,6 +43,8 @@ To use tailwind plugins or manually customize tailwind, you can can install the 
 npx @tailwindcss/cli -i ./input.css -o ./assets/tailwind.css --watch
 ```
 
+Note: if you create any tailwind css files in `assets/styling` they *must* be imported in `tailwind.css`.
+
 ### Serving Your App
 
 Run the following command in the root of your project to start developing with the default platform:
