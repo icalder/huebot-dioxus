@@ -16,21 +16,15 @@ async fn get_sensors() -> Result<Vec<SensorViewData>, ServerFnError> {
 /// The Sensors page component that will be rendered when the current route is `[Route::Sensors]`
 #[component]
 pub fn Sensors() -> Element {
-    let sensors_resource = use_resource(get_sensors);
+    let sensors = use_loader(get_sensors)?;
 
     rsx! {
         div {
             h1 { "Sensors" }
-            match sensors_resource.value()() {
-                Some(Ok(list)) => rsx! {
-                    ul {
-                        for sensor in list {
-                            li { "{sensor.name}" }
-                        }
-                    }
-                },
-                Some(Err(e)) => rsx! { "Error loading sensors: {e}" },
-                None => rsx! { "Loading..." },
+            ul {
+                for sensor in sensors.read().iter() {
+                    li { key: "{sensor.id}", "{sensor.name}" }
+                }
             }
         }
     }

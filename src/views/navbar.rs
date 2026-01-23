@@ -9,28 +9,17 @@ use dioxus::prelude::*;
 #[component]
 pub fn Navbar() -> Element {
     rsx! {
-        div {
-            id: "navbar",
-            class: "flex flex-row mb-5",
-            Link {
-                class: "text-white mr-5 no-underline transition-colors duration-200 hover:cursor-pointer hover:text-[#91a4d2]",
-                to: Route::Home {},
-                "Home"
-            }
-            Link {
-                class: "text-white mr-5 no-underline transition-colors duration-200 hover:cursor-pointer hover:text-[#91a4d2]",
-                to: Route::Blog { id: 1 },
-                "Blog"
-            }
-            Link {
-                class: "text-white mr-5 no-underline transition-colors duration-200 hover:cursor-pointer hover:text-[#91a4d2]",
-                to: Route::Sensors {},
-                "Sensors"
-            }
+        div { id: "navbar", class: "flex flex-row mb-5",
+            Link { class: "nav-link", to: Route::Home {}, "Home" }
+            Link { class: "nav-link", to: Route::Blog { id: 1 }, "Blog" }
+            Link { class: "nav-link", to: Route::Sensors {}, "Sensors" }
         }
 
         // The `Outlet` component is used to render the next component inside the layout. In this case, it will render either
         // the [`Home`] or [`Blog`] component depending on the current route.
-        Outlet::<Route> {}
+        SuspenseBoundary {
+            fallback: move |_| rsx! { "Loading..." },
+            Outlet::<Route> {}
+        }
     }
 }
