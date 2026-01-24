@@ -89,6 +89,8 @@ rsx! {
 }
 ```
 
+Important: tailwind classes must be inlined or defined with @apply. Do not use rust string constants, they break hot-reloading.
+
 # Components
 
 Components are the building blocks of apps
@@ -195,6 +197,34 @@ let mut dog = use_resource(move || async move {
 match dog() {
 	Some(dog_info) => rsx! { Dog { dog_info } },
 	None => rsx! { "Loading..." },
+}
+```
+
+There is also `use_loader`.  Example:
+
+```rust
+#[server]
+async fn get_sensors() -> Result<Vec<SensorViewData>, ServerFnError> {
+    // ... code to fetch sensors using await
+
+    Ok(sensors)
+}
+
+/// The Sensors page component that will be rendered when the current route is `[Route::Sensors]`
+#[component]
+pub fn Sensors() -> Element {
+    let sensors = use_loader(get_sensors)?;
+
+    rsx! {
+        div {
+            h1 { "Sensors" }
+            ul {
+                for sensor in sensors.read().iter() {
+                    li { key: "{sensor.id}", "{sensor.name}" }
+                }
+            }
+        }
+    }
 }
 ```
 
