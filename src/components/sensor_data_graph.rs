@@ -11,6 +11,8 @@ pub fn SensorDataGraph(
     #[props(default = String::new())] unit: String,
     color: String,
 ) -> Element {
+    let mut hovered_point = use_signal(|| None::<HistoryPoint>);
+
     if history.is_empty() {
         return rsx! {
             div { class: "h-full w-full flex items-center justify-center text-gray-400 italic", "No data available" }
@@ -21,7 +23,7 @@ pub fn SensorDataGraph(
     let start_time = end_time - Duration::hours(24);
     
     // Normalize X (time) over 24 hours
-    let x_scale = |t: DateTime<Utc>| {
+    let x_scale = move |t: DateTime<Utc>| {
         let elapsed = (t - start_time).num_seconds() as f64;
         let total = 24.0 * 3600.0;
         (elapsed / total * width as f64).clamp(0.0, width as f64)
@@ -45,7 +47,7 @@ pub fn SensorDataGraph(
         }
     };
 
-    let y_scale = |v: f64| {
+    let y_scale = move |v: f64| {
         let range = max_v - min_v;
         height as f64 - ((v - min_v) / range * height as f64).clamp(0.0, height as f64)
     };
@@ -90,6 +92,32 @@ pub fn SensorDataGraph(
         }
     }
 
+    // Pre-calculate hit regions for hover effect
+    let hit_regions = if !display_history.is_empty() {
+        let mut regions = Vec::with_capacity(display_history.len());
+        let last_idx = display_history.len() - 1;
+        for (i, p) in display_history.iter().enumerate() {
+            let current_x = x_scale(p.time);
+            
+            let start_x = if i == 0 {
+                0.0
+            } else {
+                (x_scale(display_history[i-1].time) + current_x) / 2.0
+            };
+            
+            let end_x = if i == last_idx {
+                width as f64
+            } else {
+                (current_x + x_scale(display_history[i+1].time)) / 2.0
+            };
+            
+            regions.push((start_x, end_x, p.clone()));
+        }
+        regions
+    } else {
+        Vec::new()
+    };
+
     // Generate hour labels with percentages for HTML positioning
     let label_items = (0..=24).filter(|h| h % 3 == 0).map(|h| {
         let time = start_time + Duration::hours(h as i64);
@@ -117,6 +145,7 @@ pub fn SensorDataGraph(
                 view_box: "0 0 {width} {height}",
                 preserve_aspect_ratio: "none",
                 class: "overflow-visible",
+                onmouseleave: move |_| hovered_point.set(None),
                 
                 // Grid lines (horizontal)
                 if !is_discrete {
@@ -192,6 +221,47 @@ pub fn SensorDataGraph(
                         }
                     }
                 }
+                
+                // Hit Targets (Transparent)
+                g {
+                    for (start_x, end_x, p) in hit_regions {
+                        rect {
+                            x: "{start_x}",
+                            y: "0",
+                            width: "{end_x - start_x}",
+                            height: "{height}",
+                            fill: "transparent",
+                            style: "pointer-events: all",
+                            onmouseenter: move |_| hovered_point.set(Some(p.clone())),
+                        }
+                    }
+                }
+                
+                // Hover Indicator
+                if let Some(p) = hovered_point() {
+                    {
+                        let x = x_scale(p.time);
+                        let y = y_scale(p.value);
+                        rsx! {
+                            // Vertical Line
+                            line {
+                                x1: "{x}", y1: "0", x2: "{x}", y2: "{height}",
+                                stroke: "{color}",
+                                stroke_width: "1",
+                                stroke_dasharray: "4 2",
+                                opacity: "0.5",
+                                vector_effect: "non-scaling-stroke"
+                            }
+                            // Dot
+                            circle {
+                                cx: "{x}", cy: "{y}", r: "4",
+                                fill: "{color}",
+                                stroke: "white",
+                                stroke_width: "2"
+                            }
+                        }
+                    }
+                }
             }
 
             // HTML Labels (prevents font stretching)
@@ -219,6 +289,38 @@ pub fn SensorDataGraph(
                             } else {
                                 "{val:.1}{unit}"
                             }
+                        }
+                    }
+                }
+            }
+            
+            // Tooltip Popup
+            if let Some(p) = hovered_point() {
+                {
+                    let x_pct = (x_scale(p.time) / width as f64) * 100.0;
+                    let y_pct = (y_scale(p.value) / height as f64) * 100.0;
+                    let time_str = p.time.with_timezone(&chrono::Local).format("%H:%M").to_string();
+                    let val_str = if is_discrete {
+                         if p.value > 0.5 { "Active".to_string() } else { "Inactive".to_string() }
+                    } else {
+                         format!("{:.1}{}", p.value, unit)
+                    };
+                    
+                    let is_top = y_pct < 20.0;
+                    let is_right = x_pct > 80.0;
+                    let transform_style = format!(
+                        "translate({}, {})",
+                        if is_right { "-100%" } else { "-50%" },
+                        if is_top { "10px" } else { "-120%" }
+                    );
+                    
+                    rsx! {
+                        div {
+                            class: "absolute z-10 pointer-events-none bg-white dark:bg-gray-800 rounded shadow-lg p-2 border border-gray-200 dark:border-gray-700 text-xs",
+                            style: "left: {x_pct}%; top: {y_pct}%; transform: {transform_style};",
+                            
+                            div { class: "font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap", "{time_str}" }
+                            div { class: "text-gray-600 dark:text-gray-400 whitespace-nowrap", "{val_str}" }
                         }
                     }
                 }
