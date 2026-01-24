@@ -51,6 +51,8 @@ Run the following command in the root of your project to start developing with t
 
 ```bash
 dx serve --platform web
+# if you want to allow testing from other devices ion your network use:
+dx serve --addr 0.0.0.0
 ```
 
 To run for a different platform, use the `--platform platform` flag. E.g.

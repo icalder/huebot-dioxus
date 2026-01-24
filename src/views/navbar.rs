@@ -12,6 +12,7 @@ pub fn Navbar() -> Element {
         div { id: "navbar", class: "flex flex-row mb-5",
             Link { class: "nav-link", to: Route::Home {}, "Home" }
             Link { class: "nav-link", to: Route::Sensors {}, "Sensors" }
+            Link { class: "nav-link", to: Route::EventLog {}, "Events" }
         }
 
         // The `Outlet` component is used to render the next component inside the layout. In this case, it will render either

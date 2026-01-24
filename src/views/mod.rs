@@ -16,3 +16,6 @@ pub use sensors::Sensors;
 
 mod navbar;
 pub use navbar::Navbar;
+
+mod event_log;
+pub use event_log::EventLog;

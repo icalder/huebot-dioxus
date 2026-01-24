@@ -17,6 +17,7 @@ serde_json = "1.0"
 regress = "0.4.1"
 chrono = { version = "0.4", features = ["serde"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
+tokio-util = { version = "0.7.18", features = ["codec"] }
 
 [features]
 default = ["web", "server"]

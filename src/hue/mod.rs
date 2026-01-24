@@ -21,8 +21,9 @@ static HUE_CLIENT: LazyLock<client::ClientEx> = LazyLock::new(|| {
         .build()
         .unwrap();
 
-    let client = client::Client::new_with_client(&format!("https://{}", ip), reqwest_client);
-    client::ClientEx::new(client)
+    let base_url = format!("https://{}", ip);
+    let client = client::Client::new_with_client(&base_url, reqwest_client);
+    client::ClientEx::new(client, base_url)
 });
 
 #[cfg(feature = "server")]

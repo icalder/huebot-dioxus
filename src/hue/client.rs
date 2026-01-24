@@ -45,6 +45,7 @@ pub struct CompositeSensor {
 /// while delegating all original client methods via Deref
 pub struct ClientEx {
     inner: Client,
+    base_url: String,
 }
 
 impl Deref for ClientEx {
@@ -57,8 +58,11 @@ impl Deref for ClientEx {
 
 #[cfg(feature = "server")]
 impl ClientEx {
-    pub fn new(client: Client) -> Self {
-        Self { inner: client }
+    pub fn new(client: Client, base_url: String) -> Self {
+        Self {
+            inner: client,
+            base_url,
+        }
     }
 
     /// Fetch all sensors and group them by device into CompositeSensors
@@ -175,7 +179,7 @@ impl ClientEx {
             .filter(|cs| cs.motion.is_some() || cs.temperature.is_some() || cs.light.is_some())
             .collect();
 
-        sensors.sort_by(|a, b| {
+    sensors.sort_by(|a, b| {
             // Sort by outdoor status (Outdoor first), then by name
             b.is_outdoor
                 .cmp(&a.is_outdoor)
@@ -183,5 +187,43 @@ impl ClientEx {
         });
 
         Ok(sensors)
+    }
+
+    /// Returns a stream of Hue events as JSON strings
+    pub async fn event_stream(&self) -> Result<impl futures::Stream<Item = String>, reqwest::Error> {
+        use futures::StreamExt;
+        use tokio_util::codec::{FramedRead, LinesCodec};
+
+        let url = format!("{}/eventstream/clip/v2", self.base_url);
+        let response = self
+            .inner
+            .client()
+            .get(url)
+            .header("Accept", "text/event-stream")
+            .send()
+            .await?;
+
+        let stream = response
+            .bytes_stream()
+            .map(|result| result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)));
+
+        let reader = tokio_util::io::StreamReader::new(stream);
+        let lines = FramedRead::new(reader, LinesCodec::new());
+
+        let event_stream = lines.filter_map(|line_result| async move {
+            let line: String = line_result.ok()?;
+            if let Some(data) = line.strip_prefix("data: ") {
+                // Hue sends events as an array in the data field
+                // We flatten this array into individual events
+                if let Ok(events) = serde_json::from_str::<Vec<serde_json::Value>>(data) {
+                    return Some(futures::stream::iter(
+                        events.into_iter().map(|e: serde_json::Value| e.to_string()),
+                    ));
+                }
+            }
+            None
+        });
+
+        Ok(event_stream.flatten())
     }
 }
