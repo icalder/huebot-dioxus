@@ -1,7 +1,8 @@
 use crate::hue::client::CompositeSensor;
-use crate::components::{Sensor, Clock};
+use crate::components::{Sensor, Clock, ActivityIndicator};
 use crate::hue::hue_events;
 use dioxus::prelude::*;
+use chrono::Utc;
 
 #[server]
 async fn get_sensors() -> Result<Vec<CompositeSensor>, ServerFnError> {
@@ -20,6 +21,7 @@ async fn get_sensors() -> Result<Vec<CompositeSensor>, ServerFnError> {
 pub fn Sensors() -> Element {
     let initial_sensors = use_loader(get_sensors)?;
     let mut sensors = use_signal(move || initial_sensors.read().clone());
+    let mut last_global_update = use_signal(Utc::now);
 
     use_resource(move || async move {
         match hue_events().await {
@@ -29,6 +31,7 @@ pub fn Sensors() -> Element {
                         let owner_rid = v.get("owner").and_then(|o| o.get("rid")).and_then(|rid| rid.as_str());
                         let resource_id = v.get("id").and_then(|id| id.as_str());
 
+                        let mut updated = false;
                         sensors.with_mut(|list| {
                             for s in list.iter_mut() {
                                 // Update if the event belongs to this device (via owner) 
@@ -42,9 +45,14 @@ pub fn Sensors() -> Element {
 
                                 if is_owner || matches_resource {
                                     s.update_from_json(&v);
+                                    updated = true;
                                 }
                             }
                         });
+
+                        if updated {
+                            last_global_update.set(Utc::now());
+                        }
                     }
                 }
             }
@@ -63,7 +71,11 @@ pub fn Sensors() -> Element {
                     class: "text-2xl font-bold",
                     "Sensors"
                 }
-                Clock {}
+                div {
+                    class: "flex items-center gap-4",
+                    ActivityIndicator { last_update: last_global_update }
+                    Clock {}
+                }
             }
             div {
                 class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",

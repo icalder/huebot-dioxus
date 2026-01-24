@@ -9,3 +9,6 @@ pub use clock::Clock;
 
 mod sparkline;
 pub use sparkline::{Sparkline, HistoryPoint};
+
+mod activity;
+pub use activity::ActivityIndicator;

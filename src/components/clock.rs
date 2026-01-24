@@ -16,9 +16,6 @@ pub fn Clock() -> Element {
     });
 
     rsx! {
-        span {
-            class: "text-lg text-gray-500 font-mono",
-            "Local Time: {now}"
-        }
+        span { class: "text-lg text-gray-500 font-mono", "Time: {now}" }
     }
 }
