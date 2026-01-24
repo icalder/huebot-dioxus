@@ -1,4 +1,5 @@
 use crate::hue::client::SensorViewData;
+use crate::components::Sensor;
 use dioxus::prelude::*;
 
 #[server]
@@ -20,10 +21,18 @@ pub fn Sensors() -> Element {
 
     rsx! {
         div {
-            h1 { "Sensors" }
-            ul {
+            class: "container mx-auto p-4",
+            h1 {
+                class: "text-2xl font-bold mb-6",
+                "Sensors"
+            }
+            div {
+                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4",
                 for sensor in sensors.iter() {
-                    li { key: "{sensor.id}", "{sensor.name}" }
+                    Sensor {
+                        key: "{sensor.id}",
+                        name: sensor.name.clone()
+                    }
                 }
             }
         }
