@@ -3,3 +3,6 @@
 
 mod sensor;
 pub use sensor::Sensor;
+
+mod clock;
+pub use clock::Clock;

@@ -1,3 +1,4 @@
+use crate::components::Clock;
 use dioxus::prelude::*;
 
 #[server(output = StreamingText)]
@@ -37,7 +38,11 @@ pub fn EventLog() -> Element {
     rsx! {
         div {
             class: "container mx-auto p-4",
-            h1 { class: "text-2xl font-bold mb-4", "Hue Event Log (Streaming)" }
+            div {
+                class: "flex justify-between items-baseline mb-4",
+                h1 { class: "text-2xl font-bold", "Hue Event Log (Streaming)" }
+                Clock {}
+            }
             div {
                 class: "bg-black text-green-400 p-4 rounded-lg font-mono text-sm h-96 overflow-y-auto",
                 for event in events.read().iter().rev() {
