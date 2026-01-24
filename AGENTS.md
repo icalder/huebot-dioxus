@@ -297,3 +297,21 @@ The initial UI rendered by the component on the client must be identical to the 
 # Progenitor
 
 Progenitor is used to dynamically create a Hue APIU client from the OpenAPI spec. You can create docs including the generated structs by running `cargo doc --no-deps`. The docs are created in `target/doc/huebot`.
+
+# Reliability & Performance
+
+The Hue Bridge is sensitive to concurrent requests and can return 404 HTML errors when overwhelmed.
+
+## Concurrency Limiting (Semaphore)
+The `ClientEx` struct in `src/hue/client.rs` uses a `tokio::sync::Semaphore` to limit concurrent bridge requests to **3**.
+
+## Retry Logic
+A `retry` helper in `src/hue/client.rs` handles transient bridge errors with:
+- **5 attempts** maximum.
+- **Exponential backoff**: `attempts * attempts * 100ms` (up to 2.5s delay).
+- Detailed logging of transient and persistent errors.
+
+## Metadata Caching
+To avoid redundant bridge load, sensor metadata is cached in `src/hue/mod.rs` via `SENSORS_CACHE`:
+- **5-minute TTL**: Cache expires after 5 minutes.
+- **`get_sensors_cached()`**: Use this helper instead of direct bridge calls when up-to-the-second precision isn't required (e.g., loading graph metadata).

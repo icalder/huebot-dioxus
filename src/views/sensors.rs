@@ -6,14 +6,7 @@ use chrono::Utc;
 
 #[server]
 async fn get_sensors() -> Result<Vec<CompositeSensor>, ServerFnError> {
-    let client = crate::hue::get_hue_client();
-
-    let sensors = client
-        .get_sensors()
-        .await
-        .map_err(|e| ServerFnError::new(e))?;
-
-    Ok(sensors)
+    crate::hue::get_sensors_cached().await
 }
 
 /// The Sensors page component that will be rendered when the current route is `[Route::Sensors]`
@@ -26,13 +19,15 @@ pub fn Sensors() -> Element {
     use_resource(move || async move {
         match hue_events().await {
             Ok(mut stream) => {
-                while let Some(Ok(event_str)) = stream.next().await {
+                use futures::StreamExt;
+                while let Some(Ok(event_str_raw)) = stream.next().await {
+                    let event_str: String = event_str_raw;
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
                         let owner_rid = v.get("owner").and_then(|o| o.get("rid")).and_then(|rid| rid.as_str());
                         let resource_id = v.get("id").and_then(|id| id.as_str());
 
                         let mut updated = false;
-                        sensors.with_mut(|list| {
+                        sensors.with_mut(|list: &mut Vec<CompositeSensor>| {
                             for s in list.iter_mut() {
                                 // Update if the event belongs to this device (via owner) 
                                 // or matches a known resource ID already attached to this sensor

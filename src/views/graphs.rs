@@ -19,10 +19,9 @@ pub struct SensorGraphData {
 
 #[server]
 pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, ServerFnError> {
-    let client = crate::hue::get_hue_client();
     let pool = crate::hue::get_db_pool().await?;
 
-    let sensors = client.get_sensors().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+    let sensors = crate::hue::get_sensors_cached().await?;
     let sensor = sensors.iter().find(|s| s.device_id == sensor_id)
         .ok_or_else(|| ServerFnError::new("Sensor not found"))?;
 

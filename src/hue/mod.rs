@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 #[cfg(feature = "server")]
 use sqlx::PgPool;
+#[cfg(feature = "server")]
+use chrono::Utc;
 
 pub mod client;
 #[cfg(feature = "server")]
@@ -25,7 +27,7 @@ static HUE_CLIENT: LazyLock<client::ClientEx> = LazyLock::new(|| {
         .build()
         .unwrap();
 
-    let base_url = format!("https://{}", ip);
+    let base_url = format!("https://{}", ip.trim().trim_end_matches('/'));
     let client = client::Client::new_with_client(&base_url, reqwest_client);
     client::ClientEx::new(client, base_url)
 });
@@ -37,6 +39,27 @@ pub fn get_hue_client() -> &'static client::ClientEx {
 
 #[cfg(feature = "server")]
 static DB_POOL: OnceCell<PgPool> = OnceCell::const_new();
+
+#[cfg(feature = "server")]
+static SENSORS_CACHE: tokio::sync::RwLock<Option<(Vec<client::CompositeSensor>, chrono::DateTime<Utc>)>> = tokio::sync::RwLock::const_new(None);
+
+#[cfg(feature = "server")]
+pub async fn get_sensors_cached() -> Result<Vec<client::CompositeSensor>, ServerFnError> {
+    {
+        let cache = SENSORS_CACHE.read().await;
+        if let Some((sensors, timestamp)) = &*cache {
+            if (Utc::now() - *timestamp).num_minutes() < 5 {
+                return Ok(sensors.clone());
+            }
+        }
+    }
+    
+    // Cache miss or expired
+    let sensors: Vec<client::CompositeSensor> = get_hue_client().get_sensors().await.map_err(|e| ServerFnError::new(e))?;
+    let mut cache = SENSORS_CACHE.write().await;
+    *cache = Some((sensors.clone(), Utc::now()));
+    Ok(sensors)
+}
 
 #[cfg(feature = "server")]
 pub async fn get_db_pool() -> Result<PgPool, ServerFnError> {

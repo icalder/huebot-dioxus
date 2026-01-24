@@ -86,7 +86,7 @@ You can build a container image for the application using Nix. This creates a la
     The image will be tagged as `huebot:latest`.
 
 3.  **Run the container:**
-    Ensure you have a `.env` file with `HUE_BRIDGE_IP`, `HUE_BRIDGE_USERNAME`, and `DATABASE_URL` set.
+    Ensure you have a `.env` file with `HUE_IP`, `HUE_KEY`, and `DATABASE_URL` set.
     ```bash
     podman run --rm -p 8080:8080 --env-file .env huebot:latest
     ```

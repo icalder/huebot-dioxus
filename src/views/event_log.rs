@@ -6,10 +6,13 @@ use std::collections::HashMap;
 #[server]
 pub async fn get_device_names() -> Result<HashMap<String, String>, ServerFnError> {
     let client = crate::hue::get_hue_client();
-    let names = client
+    let names: HashMap<String, String> = client
         .get_name_map()
         .await
-        .map_err(|e| ServerFnError::new(e))?;
+        .map_err(|e| {
+            let msg = e.to_string();
+            ServerFnError::new(if msg.len() > 100 { &msg[..100] } else { &msg })
+        })?;
     Ok(names)
 }
 
@@ -21,7 +24,9 @@ pub fn EventLog() -> Element {
     use_resource(move || async move {
         match hue_events().await {
             Ok(mut stream) => {
-                while let Some(Ok(event)) = stream.next().await {
+                use futures::StreamExt;
+                while let Some(Ok(event_str)) = stream.next().await {
+                    let event: String = event_str;
                     let v: serde_json::Value = serde_json::from_str(&event).unwrap_or(serde_json::Value::Null);
                     
                     // Try to extract the resource ID or the owner ID
@@ -57,7 +62,7 @@ pub fn EventLog() -> Element {
                         }
                     });
 
-                    events.with_mut(|evs| {
+                    events.with_mut(|evs: &mut Vec<(String, String)>| {
                         evs.push((display_name, event));
                         if evs.len() > 20 {
                             evs.remove(0);
