@@ -2404,6 +2404,7 @@ dependencies = [
  "chrono",
  "dioxus",
  "futures",
+ "gloo-timers",
  "progenitor",
  "regress 0.4.1",
  "reqwest 0.13.1",
