@@ -22,7 +22,7 @@ pub fn Sensors() -> Element {
         div {
             h1 { "Sensors" }
             ul {
-                for sensor in sensors.read().iter() {
+                for sensor in sensors.iter() {
                     li { key: "{sensor.id}", "{sensor.name}" }
                 }
             }
