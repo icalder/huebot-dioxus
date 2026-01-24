@@ -13,6 +13,8 @@ generate_api!("hue-openapi.yaml");
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotionData {
     pub id: String,
+    pub id_v1: Option<String>,
+    pub enabled: bool,
     pub presence: bool,
     pub last_updated: DateTime<Utc>,
 }
@@ -20,6 +22,8 @@ pub struct MotionData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TemperatureData {
     pub id: String,
+    pub id_v1: Option<String>,
+    pub enabled: bool,
     pub temperature: f64,
     pub last_updated: DateTime<Utc>,
 }
@@ -27,6 +31,8 @@ pub struct TemperatureData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LightData {
     pub id: String,
+    pub id_v1: Option<String>,
+    pub enabled: bool,
     pub light_level: i32,
     pub last_updated: DateTime<Utc>,
 }
@@ -36,6 +42,7 @@ pub struct CompositeSensor {
     pub device_id: String,
     pub name: String,
     pub is_outdoor: bool,
+    pub enabled: bool,
     pub motion: Option<MotionData>,
     pub temperature: Option<TemperatureData>,
     pub light: Option<LightData>,
@@ -45,37 +52,63 @@ impl CompositeSensor {
     pub fn update_from_json(&mut self, v: &serde_json::Value) {
         let event_type = v.get("type").and_then(|t| t.as_str());
         let id = v.get("id").and_then(|id| id.as_str()).unwrap_or_default().to_string();
+        let id_v1 = v.get("id_v1").and_then(|id| id.as_str()).map(|s| s.to_string());
+        let enabled = v.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true);
 
         match event_type {
             Some("motion") => {
                 if let Some(report) = v.get("motion").and_then(|m| m.get("motion_report")) {
                     self.motion = Some(MotionData {
                         id,
+                        id_v1,
+                        enabled,
                         presence: report.get("motion").and_then(|m| m.as_bool()).unwrap_or(false),
                         last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
                     });
+                } else if v.get("enabled").is_some() {
+                    if let Some(m) = &mut self.motion {
+                        m.enabled = enabled;
+                    }
                 }
             }
             Some("temperature") => {
                 if let Some(report) = v.get("temperature").and_then(|t| t.get("temperature_report")) {
                     self.temperature = Some(TemperatureData {
                         id,
+                        id_v1,
+                        enabled,
                         temperature: report.get("temperature").and_then(|t| t.as_f64()).unwrap_or(0.0),
                         last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
                     });
+                } else if v.get("enabled").is_some() {
+                    if let Some(t) = &mut self.temperature {
+                        t.enabled = enabled;
+                    }
                 }
             }
             Some("light_level") => {
                 if let Some(report) = v.get("light").and_then(|l| l.get("light_level_report")) {
                     self.light = Some(LightData {
                         id,
+                        id_v1,
+                        enabled,
                         light_level: report.get("light_level").and_then(|l| l.as_i64()).map(|v| v as i32).unwrap_or(0),
                         last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
                     });
+                } else if v.get("enabled").is_some() {
+                    if let Some(l) = &mut self.light {
+                        l.enabled = enabled;
+                    }
                 }
             }
             _ => {}
         }
+
+        // Update overall enabled state: if any sensor service is enabled, the composite is considered enabled.
+        // Usually they are all enabled/disabled together if it's the main "sensor" switch.
+        self.enabled = self.motion.as_ref().map(|m| m.enabled).unwrap_or(true) 
+            && self.temperature.as_ref().map(|t| t.enabled).unwrap_or(true)
+            && self.light.as_ref().map(|l| l.enabled).unwrap_or(true);
     }
 }
 
@@ -141,6 +174,8 @@ impl ClientEx {
                     if let Some(report) = m.motion.as_ref().and_then(|m| m.motion_report.as_ref()) {
                         cs.motion = Some(MotionData {
                             id: id.to_string(),
+                            id_v1: m.id_v1.as_ref().map(|v| v.to_string()),
+                            enabled: m.enabled.unwrap_or(true),
                             presence: report.motion.unwrap_or(false),
                             last_updated: Self::parse_date(&report.changed),
                         });
@@ -160,6 +195,8 @@ impl ClientEx {
                     {
                         cs.temperature = Some(TemperatureData {
                             id: id.to_string(),
+                            id_v1: t.id_v1.as_ref().map(|v| v.to_string()),
+                            enabled: t.enabled.unwrap_or(true),
                             temperature: report.temperature.unwrap_or(0.0),
                             last_updated: report.changed.unwrap_or_else(Utc::now),
                         });
@@ -176,12 +213,20 @@ impl ClientEx {
                     {
                         cs.light = Some(LightData {
                             id: id.to_string(),
+                            id_v1: l.id_v1.as_ref().map(|v| v.to_string()),
+                            enabled: l.enabled.unwrap_or(true),
                             light_level: report.light_level.map(|v| v as i32).unwrap_or(0),
                             last_updated: report.changed.unwrap_or_else(Utc::now),
                         });
                     }
                 }
             }
+        }
+
+        for cs in device_map.values_mut() {
+            cs.enabled = cs.motion.as_ref().map(|m| m.enabled).unwrap_or(true)
+                && cs.temperature.as_ref().map(|t| t.enabled).unwrap_or(true)
+                && cs.light.as_ref().map(|l| l.enabled).unwrap_or(true);
         }
 
         let mut sensors: Vec<CompositeSensor> = device_map
@@ -320,6 +365,7 @@ impl ClientEx {
                         device_id: id,
                         name,
                         is_outdoor,
+                        enabled: true,
                         motion: None,
                         temperature: None,
                         light: None,

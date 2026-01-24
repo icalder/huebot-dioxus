@@ -10,5 +10,8 @@ pub use clock::Clock;
 mod sparkline;
 pub use sparkline::{Sparkline, HistoryPoint};
 
+mod sensor_data_graph;
+pub use sensor_data_graph::SensorDataGraph;
+
 mod activity;
 pub use activity::ActivityIndicator;

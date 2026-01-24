@@ -1,4 +1,8 @@
 use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use tokio::sync::OnceCell;
+#[cfg(feature = "server")]
+use sqlx::PgPool;
 
 pub mod client;
 #[cfg(feature = "server")]
@@ -29,6 +33,17 @@ static HUE_CLIENT: LazyLock<client::ClientEx> = LazyLock::new(|| {
 #[cfg(feature = "server")]
 pub fn get_hue_client() -> &'static client::ClientEx {
     &HUE_CLIENT
+}
+
+#[cfg(feature = "server")]
+static DB_POOL: OnceCell<PgPool> = OnceCell::const_new();
+
+#[cfg(feature = "server")]
+pub async fn get_db_pool() -> Result<PgPool, ServerFnError> {
+    DB_POOL.get_or_try_init(|| async {
+        let db_url = std::env::var("DATABASE_URL").map_err(|_| ServerFnError::new("DATABASE_URL must be set"))?;
+        PgPool::connect(&db_url).await.map_err(|e| ServerFnError::new(e.to_string()))
+    }).await.cloned()
 }
 
 use dioxus::prelude::*;

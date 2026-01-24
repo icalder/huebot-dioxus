@@ -19,3 +19,6 @@ pub use navbar::Navbar;
 
 mod event_log;
 pub use event_log::EventLog;
+
+mod graphs;
+pub use graphs::Graphs;

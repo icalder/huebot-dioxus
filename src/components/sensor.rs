@@ -1,5 +1,6 @@
 use crate::hue::client::CompositeSensor;
 use crate::components::{Sparkline, HistoryPoint};
+use crate::Route;
 use dioxus::prelude::*;
 use std::cmp::Ordering;
 use chrono::{Utc, Duration};
@@ -108,7 +109,13 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
         )
     };
 
-    let glow_class = if is_glowing() {
+    let disabled_class = if !sensor_ref.enabled {
+        "grayscale opacity-60 contrast-75"
+    } else {
+        ""
+    };
+
+    let glow_class = if is_glowing() && sensor_ref.enabled {
         "brightness-125 scale-105 shadow-2xl ring-4 ring-blue-500 z-10"
     } else {
         "brightness-100 scale-100 shadow-md ring-0 ring-transparent z-0"
@@ -121,7 +128,9 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     };
 
     let motion_class = if let Some(m) = &sensor_ref.motion {
-        if m.presence {
+        if !m.enabled {
+            "text-gray-500 dark:text-gray-500 italic"
+        } else if m.presence {
             "text-red-600 dark:text-red-400 font-bold"
         } else {
             "text-green-600 dark:text-green-400"
@@ -131,96 +140,114 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     };
 
     rsx! {
-        div {
-            class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} {transition_class}",
+        Link {
+            to: Route::Graphs { sensor_id: sensor_ref.device_id.clone() },
+            class: "contents",
             div {
-                class: "flex items-center justify-between mb-6",
-                div {
-                    class: "bg-gray-50 dark:bg-black/40 px-3 py-1.5 rounded border border-gray-300/50 dark:border-gray-800 shadow-inner flex-grow mr-4 overflow-hidden",
-                    h3 {
-                        class: "text-base font-bold tracking-wide text-gray-600 dark:text-gray-300 truncate",
-                        "{sensor_ref.name}"
+                class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} {transition_class} {disabled_class} relative overflow-hidden",
+                if !sensor_ref.enabled {
+                    div {
+                        class: "absolute top-0 right-0 bg-gray-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-bl-md z-20 uppercase tracking-tighter",
+                        "Disabled"
                     }
                 }
-                span {
-                    class: "text-2xl drop-shadow-sm",
-                    "{icon}"
-                }
-            }
-            
-            div {
-                class: "space-y-1",
-                if let Some(m) = &sensor_ref.motion {
-                    {
-                        let time = m.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
-                        let status = if m.presence { "Detected" } else { "Clear" };
-                        rsx! {
-                            div {
-                                class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-600 dark:text-gray-400", "Motion:" }
-                                div {
-                                    class: "flex items-center justify-between",
-                                    div {
-                                        span { class: "{motion_class}", "{status}" }
-                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
-                                    }
-                                    Sparkline { history: motion_history, is_discrete: true, color: "#f87171" }
-                                }
-                            }
+                div {
+                    class: "flex items-center justify-between mb-6",
+                    div {
+                        class: "bg-gray-50 dark:bg-black/40 px-3 py-1.5 rounded border border-gray-300/50 dark:border-gray-800 shadow-inner flex-grow mr-4 overflow-hidden",
+                        h3 {
+                            class: "text-base font-bold tracking-wide text-gray-600 dark:text-gray-300 truncate",
+                            "{sensor_ref.name}"
                         }
+                    }
+                    span {
+                        class: "text-2xl drop-shadow-sm",
+                        "{icon}"
                     }
                 }
                 
-                if let Some(t) = &sensor_ref.temperature {
-                    {
-                        let time = t.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
-                        rsx! {
-                            div {
-                                class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-600 dark:text-gray-400", "Temp:" }
+                div {
+                    class: "space-y-1",
+                    if let Some(m) = &sensor_ref.motion {
+                        {
+                            let time = m.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
+                            let status = if !m.enabled { "Disabled" } else if m.presence { "Detected" } else { "Clear" };
+                            rsx! {
                                 div {
-                                    class: "flex items-center justify-between",
+                                    class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
+                                    span { class: "text-gray-600 dark:text-gray-400", "Motion:" }
                                     div {
-                                        span { 
-                                            class: "font-semibold", 
-                                            "{t.temperature:.1}°C"
-                                            match temp_trend() {
-                                                Ordering::Greater => rsx! { span { class: "text-red-500 ml-1 text-sm animate-pulse", "↑" } },
-                                                Ordering::Less => rsx! { span { class: "text-blue-500 ml-1 text-sm animate-pulse", "↓" } },
-                                                Ordering::Equal => rsx! { "" }
-                                            }
+                                        class: "flex items-center justify-between",
+                                        div {
+                                            span { class: "{motion_class}", "{status}" }
+                                            span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                         }
-                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
+                                        Sparkline { history: motion_history, is_discrete: true, color: "#f87171" }
                                     }
-                                    Sparkline { history: temp_history, color: "#60a5fa" }
                                 }
                             }
                         }
                     }
-                }
-
-                if let Some(l) = &sensor_ref.light {
-                    {
-                        let time = l.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
-                        rsx! {
-                            div {
-                                class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-600 dark:text-gray-400", "Light:" }
+                    
+                    if let Some(t) = &sensor_ref.temperature {
+                        {
+                            let time = t.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
+                            let value_text = if !t.enabled { "Disabled".to_string() } else { format!("{:.1}°C", t.temperature) };
+                            let value_class = if !t.enabled { "text-gray-500 dark:text-gray-500 italic" } else { "font-semibold" };
+                            rsx! {
                                 div {
-                                    class: "flex items-center justify-between",
+                                    class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
+                                    span { class: "text-gray-600 dark:text-gray-400", "Temp:" }
                                     div {
-                                        span { 
-                                            class: "font-semibold", 
-                                            "{l.light_level} lx"
-                                            match light_trend() {
-                                                Ordering::Greater => rsx! { span { class: "text-yellow-500 ml-1 text-sm animate-pulse", "↑" } },
-                                                Ordering::Less => rsx! { span { class: "text-gray-400 ml-1 text-sm animate-pulse", "↓" } },
-                                                Ordering::Equal => rsx! { "" }
+                                        class: "flex items-center justify-between",
+                                        div {
+                                            span { 
+                                                class: "{value_class}", 
+                                                "{value_text}"
+                                                if t.enabled {
+                                                    match temp_trend() {
+                                                        Ordering::Greater => rsx! { span { class: "text-red-500 ml-1 text-sm animate-pulse", "↑" } },
+                                                        Ordering::Less => rsx! { span { class: "text-blue-500 ml-1 text-sm animate-pulse", "↓" } },
+                                                        Ordering::Equal => rsx! { "" }
+                                                    }
+                                                }
                                             }
+                                            span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                         }
-                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
+                                        Sparkline { history: temp_history, color: "#60a5fa" }
                                     }
-                                    Sparkline { history: light_history, color: "#fbbf24" }
+                                }
+                            }
+                        }
+                    }
+
+                    if let Some(l) = &sensor_ref.light {
+                        {
+                            let time = l.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
+                            let value_text = if !l.enabled { "Disabled".to_string() } else { format!("{} lx", l.light_level) };
+                            let value_class = if !l.enabled { "text-gray-500 dark:text-gray-500 italic" } else { "font-semibold" };
+                            rsx! {
+                                div {
+                                    class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
+                                    span { class: "text-gray-600 dark:text-gray-400", "Light:" }
+                                    div {
+                                        class: "flex items-center justify-between",
+                                        div {
+                                            span { 
+                                                class: "{value_class}", 
+                                                "{value_text}"
+                                                if l.enabled {
+                                                    match light_trend() {
+                                                        Ordering::Greater => rsx! { span { class: "text-yellow-500 ml-1 text-sm animate-pulse", "↑" } },
+                                                        Ordering::Less => rsx! { span { class: "text-gray-400 ml-1 text-sm animate-pulse", "↓" } },
+                                                        Ordering::Equal => rsx! { "" }
+                                                    }
+                                                }
+                                            }
+                                            span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
+                                        }
+                                        Sparkline { history: light_history, color: "#fbbf24" }
+                                    }
                                 }
                             }
                         }

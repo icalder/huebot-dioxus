@@ -2,7 +2,7 @@
 // need dioxus
 use dioxus::prelude::*;
 
-use views::{EventLog, Home, Navbar, Sensors};
+use views::{EventLog, Home, Navbar, Sensors, Graphs};
 
 /// Define a hue module, for all interactions with the Hue Bridge
 mod hue;
@@ -27,6 +27,8 @@ enum Route {
         // the component for that route will be rendered. The component name that is rendered defaults to the variant name.
         #[route("/")]
         Sensors {},
+        #[route("/sensors/:sensor_id")]
+        Graphs { sensor_id: String },
         #[route("/events")]
         EventLog {},
         #[route("/home")]
