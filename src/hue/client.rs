@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use progenitor::generate_api;
+use progenitor::{generate_api, Error as ProgenitorError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;

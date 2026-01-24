@@ -50,12 +50,31 @@ pub fn SensorDataGraph(
         height as f64 - ((v - min_v) / range * height as f64).clamp(0.0, height as f64)
     };
 
-    let mut path_data = String::new();
     let mut sorted_history = history.clone();
     sorted_history.sort_by_key(|p| p.time);
 
+    // Apply smoothing for non-discrete data
+    let display_history = if !is_discrete && sorted_history.len() > 3 {
+        let mut smoothed = Vec::new();
+        let window_size = 5;
+        for i in 0..sorted_history.len() {
+            let start = i.saturating_sub(window_size / 2);
+            let end = (i + window_size / 2).min(sorted_history.len() - 1);
+            let count = (end - start + 1) as f64;
+            let sum: f64 = sorted_history[start..=end].iter().map(|p| p.value).sum();
+            smoothed.push(HistoryPoint {
+                value: sum / count,
+                time: sorted_history[i].time,
+            });
+        }
+        smoothed
+    } else {
+        sorted_history
+    };
+
+    let mut path_data = String::new();
     let mut graph_points = Vec::new();
-    for (i, p) in sorted_history.iter().enumerate() {
+    for (i, p) in display_history.iter().enumerate() {
         let x = x_scale(p.time);
         let y = y_scale(p.value);
         graph_points.push((x, y, p.value));
@@ -63,7 +82,7 @@ pub fn SensorDataGraph(
         if i == 0 {
             path_data.push_str(&format!("M {} {}", x, y));
         } else if is_discrete {
-            let prev_y = y_scale(sorted_history[i-1].value);
+            let prev_y = y_scale(display_history[i-1].value);
             path_data.push_str(&format!(" L {} {}", x, prev_y));
             path_data.push_str(&format!(" L {} {}", x, y));
         } else {

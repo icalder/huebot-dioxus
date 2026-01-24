@@ -6,10 +6,11 @@ use std::collections::HashMap;
 #[server]
 pub async fn get_device_names() -> Result<HashMap<String, String>, ServerFnError> {
     let client = crate::hue::get_hue_client();
-    client
+    let names = client
         .get_name_map()
         .await
-        .map_err(|e| ServerFnError::new(e))
+        .map_err(|e| ServerFnError::new(e))?;
+    Ok(names)
 }
 
 #[component]
