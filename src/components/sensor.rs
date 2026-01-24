@@ -109,9 +109,9 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     };
 
     let glow_class = if is_glowing() {
-        "brightness-110 scale-[1.01] shadow-xl ring-2 ring-blue-400/50"
+        "brightness-125 scale-105 shadow-2xl ring-4 ring-blue-500 z-10"
     } else {
-        "brightness-100 scale-100 shadow-md ring-0 ring-transparent"
+        "brightness-100 scale-100 shadow-md ring-0 ring-transparent z-0"
     };
 
     let transition_class = if is_glowing() {
@@ -134,13 +134,16 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
         div {
             class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} {transition_class}",
             div {
-                class: "flex items-center justify-between mb-4",
-                h3 {
-                    class: "text-lg font-semibold",
-                    "{sensor_ref.name}"
+                class: "flex items-center justify-between mb-6",
+                div {
+                    class: "bg-gray-50 dark:bg-black/40 px-3 py-1.5 rounded border border-gray-300/50 dark:border-gray-800 shadow-inner flex-grow mr-4 overflow-hidden",
+                    h3 {
+                        class: "text-base font-bold tracking-wide text-gray-600 dark:text-gray-300 truncate",
+                        "{sensor_ref.name}"
+                    }
                 }
                 span {
-                    class: "text-2xl",
+                    class: "text-2xl drop-shadow-sm",
                     "{icon}"
                 }
             }
@@ -154,12 +157,12 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                         rsx! {
                             div {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-500", "Motion:" }
+                                span { class: "text-gray-600 dark:text-gray-400", "Motion:" }
                                 div {
                                     class: "flex items-center justify-between",
                                     div {
                                         span { class: "{motion_class}", "{status}" }
-                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                     }
                                     Sparkline { history: motion_history, is_discrete: true, color: "#f87171" }
                                 }
@@ -174,7 +177,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                         rsx! {
                             div {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-500", "Temp:" }
+                                span { class: "text-gray-600 dark:text-gray-400", "Temp:" }
                                 div {
                                     class: "flex items-center justify-between",
                                     div {
@@ -187,7 +190,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                                 Ordering::Equal => rsx! { "" }
                                             }
                                         }
-                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                     }
                                     Sparkline { history: temp_history, color: "#60a5fa" }
                                 }
@@ -202,7 +205,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                         rsx! {
                             div {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
-                                span { class: "text-gray-500", "Light:" }
+                                span { class: "text-gray-600 dark:text-gray-400", "Light:" }
                                 div {
                                     class: "flex items-center justify-between",
                                     div {
@@ -215,7 +218,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                                 Ordering::Equal => rsx! { "" }
                                             }
                                         }
-                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                        span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                     }
                                     Sparkline { history: light_history, color: "#fbbf24" }
                                 }

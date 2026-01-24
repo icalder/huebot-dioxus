@@ -77,6 +77,9 @@ fn main() {
 fn App() -> Element {
     // The `rsx!` macro lets us define HTML inside of rust. It expands to an Element with all of our HTML inside.
     rsx! {
+        // Ensure the app scales correctly on mobile devices
+        document::Meta { name: "viewport", content: "width=device-width, initial-scale=1.0" }
+        
         // In addition to element and text (which we will see later), rsx can contain other components. In this case,
         // we are using the `document::Link` component to add a link to our favicon and main CSS file into the head of our app.
         document::Link { rel: "icon", href: FAVICON }
