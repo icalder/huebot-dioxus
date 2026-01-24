@@ -1,4 +1,5 @@
 use crate::components::Clock;
+use crate::hue::hue_events;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -9,18 +10,6 @@ pub async fn get_device_names() -> Result<HashMap<String, String>, ServerFnError
         .get_name_map()
         .await
         .map_err(|e| ServerFnError::new(e))
-}
-
-#[server(output = StreamingText)]
-pub async fn hue_events() -> Result<dioxus::fullstack::TextStream, ServerFnError> {
-    let client = crate::hue::get_hue_client();
-    
-    let stream = client
-        .event_stream()
-        .await
-        .map_err(|e| ServerFnError::new(e))?;
-        
-    Ok(dioxus::fullstack::TextStream::new(stream))
 }
 
 #[component]

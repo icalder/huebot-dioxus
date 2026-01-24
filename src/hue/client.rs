@@ -41,6 +41,44 @@ pub struct CompositeSensor {
     pub light: Option<LightData>,
 }
 
+impl CompositeSensor {
+    pub fn update_from_json(&mut self, v: &serde_json::Value) {
+        let event_type = v.get("type").and_then(|t| t.as_str());
+        let id = v.get("id").and_then(|id| id.as_str()).unwrap_or_default().to_string();
+
+        match event_type {
+            Some("motion") => {
+                if let Some(report) = v.get("motion").and_then(|m| m.get("motion_report")) {
+                    self.motion = Some(MotionData {
+                        id,
+                        presence: report.get("motion").and_then(|m| m.as_bool()).unwrap_or(false),
+                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
+                    });
+                }
+            }
+            Some("temperature") => {
+                if let Some(report) = v.get("temperature").and_then(|t| t.get("temperature_report")) {
+                    self.temperature = Some(TemperatureData {
+                        id,
+                        temperature: report.get("temperature").and_then(|t| t.as_f64()).unwrap_or(0.0),
+                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
+                    });
+                }
+            }
+            Some("light_level") => {
+                if let Some(report) = v.get("light").and_then(|l| l.get("light_level_report")) {
+                    self.light = Some(LightData {
+                        id,
+                        light_level: report.get("light_level").and_then(|l| l.as_i64()).map(|v| v as i32).unwrap_or(0),
+                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Extended client wrapper that adds high-level convenience methods
 /// while delegating all original client methods via Deref
 pub struct ClientEx {
@@ -53,6 +91,21 @@ impl Deref for ClientEx {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl ClientEx {
+    pub fn parse_date(s: &Option<String>) -> DateTime<Utc> {
+        s.as_ref()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(Utc::now)
+    }
+
+    fn get_owner_rid(
+        owner: &Option<crate::hue::client::types::ResourceIdentifier>,
+    ) -> Option<String> {
+        owner.as_ref().and_then(|o| o.rid.as_ref()).map(|s| s.to_string())
     }
 }
 
@@ -245,19 +298,6 @@ impl ClientEx {
     }
 
     // --- Private Helpers ---
-
-    fn parse_date(s: &Option<String>) -> DateTime<Utc> {
-        s.as_ref()
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or_else(Utc::now)
-    }
-
-    fn get_owner_rid(
-        owner: &Option<crate::hue::client::types::ResourceIdentifier>,
-    ) -> Option<String> {
-        owner.as_ref().and_then(|o| o.rid.as_ref()).map(|s| s.to_string())
-    }
 
     fn init_device_map(
         &self,

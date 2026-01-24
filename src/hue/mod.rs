@@ -30,3 +30,17 @@ static HUE_CLIENT: LazyLock<client::ClientEx> = LazyLock::new(|| {
 pub fn get_hue_client() -> &'static client::ClientEx {
     &HUE_CLIENT
 }
+
+use dioxus::prelude::*;
+
+#[server(output = StreamingText)]
+pub async fn hue_events() -> Result<dioxus::fullstack::TextStream, ServerFnError> {
+    let client = get_hue_client();
+    
+    let stream = client
+        .event_stream()
+        .await
+        .map_err(|e| ServerFnError::new(e))?;
+        
+    Ok(dioxus::fullstack::TextStream::new(stream))
+}

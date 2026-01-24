@@ -2,9 +2,27 @@ use crate::hue::client::CompositeSensor;
 use dioxus::prelude::*;
 
 #[component]
-pub fn Sensor(sensor: CompositeSensor) -> Element {
-    let name_lower = sensor.name.to_lowercase();
-    let (border_class, bg_class, icon) = if sensor.is_outdoor {
+pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
+    let mut is_glowing = use_signal(|| false);
+
+    // Trigger glow effect on data change
+    use_effect(move || {
+        // We track the sensor prop. Read() will subscribe this effect to changes.
+        sensor.read();
+        
+        is_glowing.set(true);
+        spawn(async move {
+            #[cfg(feature = "server")]
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            #[cfg(not(feature = "server"))]
+            gloo_timers::future::sleep(std::time::Duration::from_millis(500)).await;
+            is_glowing.set(false);
+        });
+    });
+
+    let sensor_ref = sensor.read();
+    let name_lower = sensor_ref.name.to_lowercase();
+    let (border_class, bg_class, icon) = if sensor_ref.is_outdoor {
         (
             "border border-gray-300 dark:border-gray-500",
             "bg-blue-50 dark:bg-blue-900/10",
@@ -25,7 +43,13 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
         )
     };
 
-    let motion_class = if let Some(m) = &sensor.motion {
+    let glow_class = if is_glowing() {
+        "brightness-110 scale-[1.01] shadow-xl ring-2 ring-blue-400/50"
+    } else {
+        "brightness-100 scale-100 shadow-md ring-0 ring-transparent"
+    };
+
+    let motion_class = if let Some(m) = &sensor_ref.motion {
         if m.presence {
             "text-red-600 dark:text-red-400 font-bold"
         } else {
@@ -37,12 +61,12 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
 
     rsx! {
         div {
-            class: "p-4 rounded-lg shadow-md {border_class} {bg_class} transition-colors duration-200",
+            class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} transition-all duration-500 ease-in-out",
             div {
                 class: "flex items-center justify-between mb-4",
                 h3 {
                     class: "text-lg font-semibold",
-                    "{sensor.name}"
+                    "{sensor_ref.name}"
                 }
                 span {
                     class: "text-2xl",
@@ -52,7 +76,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
             
             div {
                 class: "space-y-1",
-                if let Some(m) = &sensor.motion {
+                if let Some(m) = &sensor_ref.motion {
                     {
                         let time = m.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
                         let status = if m.presence { "Detected" } else { "Clear" };
@@ -69,7 +93,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
                     }
                 }
                 
-                if let Some(t) = &sensor.temperature {
+                if let Some(t) = &sensor_ref.temperature {
                     {
                         let time = t.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
                         rsx! {
@@ -85,7 +109,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
                     }
                 }
 
-                if let Some(l) = &sensor.light {
+                if let Some(l) = &sensor_ref.light {
                     {
                         let time = l.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
                         rsx! {
