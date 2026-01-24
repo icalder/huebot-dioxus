@@ -9,3 +9,4 @@
 .direnv
 result
 .gemini
+.env
