@@ -41,15 +41,21 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
 
     if let Some(m) = &sensor.motion {
         if let Some(v1_id) = extract_id(&m.id_v1) {
-            let rows = sqlx::query!(
-                "select creationtime as \"creationtime!\", motion from sensor_motion($1, $2, $3)",
-                v1_id, start, end
-            ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows = sqlx::query(
+                "select creationtime, motion from sensor_motion($1, $2, $3)"
+            )
+            .bind(v1_id)
+            .bind(start)
+            .bind(end)
+            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
-                if let Some(value) = row.motion {
+                use sqlx::Row;
+                let creationtime: chrono::NaiveDateTime = row.get(0);
+                let motion: Option<bool> = row.get(1);
+                if let Some(value) = motion {
                     motions.push(GraphPoint {
-                        timestamp: DateTime::from_naive_utc_and_offset(row.creationtime, Utc),
+                        timestamp: DateTime::from_naive_utc_and_offset(creationtime, Utc),
                         value,
                     });
                 }
@@ -59,15 +65,21 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
 
     if let Some(t) = &sensor.temperature {
         if let Some(v1_id) = extract_id(&t.id_v1) {
-            let rows = sqlx::query!(
-                "select creationtime as \"creationtime!\", temperature from sensor_temperature($1, $2, $3)",
-                v1_id, start, end
-            ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows = sqlx::query(
+                "select creationtime, temperature from sensor_temperature($1, $2, $3)"
+            )
+            .bind(v1_id)
+            .bind(start)
+            .bind(end)
+            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
-                if let Some(value) = row.temperature {
+                use sqlx::Row;
+                let creationtime: chrono::NaiveDateTime = row.get(0);
+                let temperature: Option<f32> = row.get(1);
+                if let Some(value) = temperature {
                     temperatures.push(GraphPoint {
-                        timestamp: DateTime::from_naive_utc_and_offset(row.creationtime, Utc),
+                        timestamp: DateTime::from_naive_utc_and_offset(creationtime, Utc),
                         value,
                     });
                 }
@@ -77,15 +89,21 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
 
     if let Some(l) = &sensor.light {
         if let Some(v1_id) = extract_id(&l.id_v1) {
-            let rows = sqlx::query!(
-                "select creationtime as \"creationtime!\", light_level from sensor_light_level($1, $2, $3)",
-                v1_id, start, end
-            ).fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows = sqlx::query(
+                "select creationtime, light_level from sensor_light_level($1, $2, $3)"
+            )
+            .bind(v1_id)
+            .bind(start)
+            .bind(end)
+            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
-                if let Some(value) = row.light_level {
+                use sqlx::Row;
+                let creationtime: chrono::NaiveDateTime = row.get(0);
+                let light_level: Option<i32> = row.get(1);
+                if let Some(value) = light_level {
                     light_levels.push(GraphPoint {
-                        timestamp: DateTime::from_naive_utc_and_offset(row.creationtime, Utc),
+                        timestamp: DateTime::from_naive_utc_and_offset(creationtime, Utc),
                         value,
                     });
                 }
