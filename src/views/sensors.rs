@@ -31,7 +31,8 @@ pub fn Sensors() -> Element {
                 for sensor in sensors.iter() {
                     Sensor {
                         key: "{sensor.id}",
-                        name: sensor.name.clone()
+                        name: sensor.name.clone(),
+                        is_outdoor: sensor.is_outdoor
                     }
                 }
             }

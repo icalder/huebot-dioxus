@@ -13,6 +13,7 @@ generate_api!("hue-openapi.yaml");
 pub struct SensorViewData {
     pub id: String,
     pub name: String,
+    pub is_outdoor: bool,
 }
 
 /// Extended client wrapper that adds high-level convenience methods
@@ -44,37 +45,51 @@ impl ClientEx {
         let motion_response = motion_res?;
         let devices_response = devices_res?;
 
-        // Map device IDs to their names
-        let device_names: HashMap<String, String> = devices_response
+        // Map device IDs to their names and outdoor status
+        let device_info: HashMap<String, (String, bool)> = devices_response
             .data
             .iter()
             .filter_map(|d| {
                 let id = d.id.as_ref()?.to_string();
                 let name = d.metadata.as_ref()?.name.as_ref()?.to_string();
-                Some((id, name))
+                let is_outdoor = d
+                    .product_data
+                    .as_ref()
+                    .and_then(|pd| pd.product_name.as_ref())
+                    .map(|pn| pn.to_lowercase().contains("outdoor"))
+                    .unwrap_or(false);
+                Some((id, (name, is_outdoor)))
             })
             .collect();
 
         let mut sensors = Vec::new();
         for m in &motion_response.data {
             if let Some(id) = &m.id {
-                // Find the owner device's name
-                let name = m
+                // Find the owner device's name and outdoor status
+                let (name, is_outdoor) = m
                     .owner
                     .as_ref()
                     .and_then(|owner| {
                         let rid = owner.rid.as_ref()?.to_string();
-                        device_names.get(&rid)
+                        device_info.get(&rid)
                     })
                     .cloned()
-                    .unwrap_or_else(|| format!("Motion Sensor {}", id.to_string()));
+                    .unwrap_or_else(|| (format!("Motion Sensor {}", id.to_string()), false));
 
                 sensors.push(SensorViewData {
                     id: id.to_string(),
                     name,
+                    is_outdoor,
                 });
             }
         }
+
+        sensors.sort_by(|a, b| {
+            // Sort by outdoor status (Outdoor first), then by name
+            b.is_outdoor
+                .cmp(&a.is_outdoor)
+                .then_with(|| a.name.cmp(&b.name))
+        });
 
         Ok(sensors)
     }
