@@ -146,27 +146,28 @@ pub fn Graphs(sensor_id: String) -> Element {
                             }
                         }
                     }
-                    div {
-                        class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
-                        h2 { class: "text-lg font-semibold mb-2", "Temperature" }
-                        div { class: "h-64 w-full", 
-                            SensorDataGraph { 
-                                history: temp_history, 
-                                color: "#60a5fa" // blue-400
-                            }
-                        }
-                    }
-                    div {
-                        class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
-                        h2 { class: "text-lg font-semibold mb-2", "Light Level" }
-                        div { class: "h-64 w-full", 
-                            SensorDataGraph { 
-                                history: light_history, 
-                                color: "#fbbf24" // amber-400
-                            }
-                        }
-                    }
-                }
+                                    div {
+                                        class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
+                                        h2 { class: "text-lg font-semibold mb-2", "Temperature" }
+                                        div { class: "h-64 w-full", 
+                                            SensorDataGraph { 
+                                                history: temp_history, 
+                                                unit: "°C".to_string(),
+                                                color: "#60a5fa" // blue-400
+                                            }
+                                        }
+                                    }
+                                    div {
+                                        class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
+                                        h2 { class: "text-lg font-semibold mb-2", "Light Level" }
+                                        div { class: "h-64 w-full", 
+                                            SensorDataGraph { 
+                                                history: light_history, 
+                                                unit: "lx".to_string(),
+                                                color: "#fbbf24" // amber-400
+                                            }
+                                        }
+                                    }                }
             }
         }
     }

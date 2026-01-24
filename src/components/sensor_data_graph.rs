@@ -8,6 +8,7 @@ pub fn SensorDataGraph(
     #[props(default = 1000)] width: u32,
     #[props(default = 300)] height: u32,
     #[props(default = false)] is_discrete: bool,
+    #[props(default = String::new())] unit: String,
     color: String,
 ) -> Element {
     if history.is_empty() {
@@ -78,8 +79,19 @@ pub fn SensorDataGraph(
         (pct, label)
     }).collect::<Vec<_>>();
 
+    // Generate Y labels for non-discrete data
+    let y_labels = if !is_discrete {
+        (0..=4).map(|i| {
+            let pct = (i as f64 / 4.0) * 100.0;
+            let val = max_v - (i as f64 / 4.0) * (max_v - min_v);
+            (pct, val)
+        }).collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
     rsx! {
-        div { class: "relative w-full h-full pt-2 pb-8 px-2",
+        div { class: "relative w-full h-full pt-2 pb-8 pl-2 pr-12",
             svg {
                 width: "100%",
                 height: "100%",
@@ -164,12 +176,31 @@ pub fn SensorDataGraph(
             }
 
             // HTML Labels (prevents font stretching)
-            div { class: "absolute bottom-0 left-2 right-2 h-6 pointer-events-none",
+            div { class: "absolute bottom-0 left-2 right-12 h-6 pointer-events-none",
                 for (pct, label) in label_items {
                     span { 
                         class: "absolute text-xs font-bold text-gray-400 dark:text-white whitespace-nowrap",
                         style: "left: {pct}%; transform: translateX(-50%);",
                         "{label}"
+                    }
+                }
+            }
+
+            // Y-Axis Labels
+            if !is_discrete {
+                div { class: "absolute top-2 bottom-8 right-0 w-12 pointer-events-none",
+                    for (pct, val) in y_labels {
+                        span { 
+                            class: "absolute right-2 text-[10px] font-bold text-gray-400 dark:text-white whitespace-nowrap",
+                            style: "top: {pct}%; transform: translateY(-50%);",
+                            if val >= 1000.0 {
+                                "{val / 1000.0:.1}k{unit}"
+                            } else if val >= 10.0 {
+                                "{val:.0}{unit}"
+                            } else {
+                                "{val:.1}{unit}"
+                            }
+                        }
                     }
                 }
             }
