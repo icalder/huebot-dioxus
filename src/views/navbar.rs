@@ -11,7 +11,6 @@ pub fn Navbar() -> Element {
     rsx! {
         div { id: "navbar", class: "flex flex-row mb-5",
             Link { class: "nav-link", to: Route::Home {}, "Home" }
-            Link { class: "nav-link", to: Route::Blog { id: 1 }, "Blog" }
             Link { class: "nav-link", to: Route::Sensors {}, "Sensors" }
         }
 

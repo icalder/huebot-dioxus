@@ -11,11 +11,8 @@
 mod home;
 pub use home::Home;
 
-mod blog;
-pub use blog::Blog;
+mod sensors;
+pub use sensors::Sensors;
 
 mod navbar;
 pub use navbar::Navbar;
-
-mod sensors;
-pub use sensors::Sensors;
