@@ -91,6 +91,13 @@ You can build a container image for the application using Nix. This creates a la
     ```
     The application will be accessible at `http://localhost:8080`.
 
+4.  **Push to Docker Hub:**
+    Tag the image with your Docker Hub username and push it:
+    ```bash
+    podman tag huebot:latest icalder/huebot:latest
+    podman push icalder/huebot:latest
+    ```
+
 ### TODO
 
   Here is a summary of the changes:
