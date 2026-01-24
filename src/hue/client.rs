@@ -179,7 +179,7 @@ impl ClientEx {
             .filter(|cs| cs.motion.is_some() || cs.temperature.is_some() || cs.light.is_some())
             .collect();
 
-    sensors.sort_by(|a, b| {
+        sensors.sort_by(|a, b| {
             // Sort by outdoor status (Outdoor first), then by name
             b.is_outdoor
                 .cmp(&a.is_outdoor)
@@ -187,6 +187,97 @@ impl ClientEx {
         });
 
         Ok(sensors)
+    }
+
+    /// Builds a map of resource IDs to device names
+    pub async fn get_name_map(&self) -> Result<HashMap<String, String>, Error<ErrorResponse>> {
+        let (devices_res, rooms_res, zones_res, lights_res, bridge_homes_res) = tokio::join!(
+            self.inner.get_devices(),
+            self.inner.get_rooms(),
+            self.inner.get_zones(),
+            self.inner.get_lights(),
+            self.inner.get_bridge_homes(),
+        );
+
+        let devices = devices_res?;
+        let rooms = rooms_res?;
+        let zones = zones_res?;
+        let lights = lights_res?;
+        let bridge_homes = bridge_homes_res?;
+
+        let mut name_map = HashMap::new();
+
+        // Map devices and their services
+        for device in &devices.data {
+            if let (Some(id), Some(metadata)) = (&device.id, &device.metadata) {
+                if let Some(name) = &metadata.name {
+                    let name_str = name.to_string();
+                    name_map.insert(id.to_string(), name_str.clone());
+
+                    for service in &device.services {
+                        if let Some(rid) = &service.rid {
+                            name_map.insert(rid.to_string(), name_str.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Map rooms
+        for room in &rooms.data {
+            if let (Some(id), Some(metadata)) = (&room.id, &room.metadata) {
+                if let Some(name) = &metadata.name {
+                    let name_str = name.to_string();
+                    name_map.insert(id.to_string(), name_str.clone());
+
+                    for service in &room.services {
+                        if let Some(rid) = &service.rid {
+                            name_map.insert(rid.to_string(), name_str.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Map zones
+        for zone in &zones.data {
+            if let (Some(id), Some(metadata)) = (&zone.id, &zone.metadata) {
+                if let Some(name) = &metadata.name {
+                    let name_str = name.to_string();
+                    name_map.insert(id.to_string(), name_str.clone());
+
+                    for service in &zone.services {
+                        if let Some(rid) = &service.rid {
+                            name_map.insert(rid.to_string(), name_str.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Map bridge homes (whole house)
+        for home in &bridge_homes.data {
+            if let Some(id) = &home.id {
+                let name = "Bridge Home".to_string();
+                name_map.insert(id.to_string(), name.clone());
+                for service in &home.services {
+                    if let Some(rid) = &service.rid {
+                        name_map.insert(rid.to_string(), name.clone());
+                    }
+                }
+            }
+        }
+
+        // Map lights (deprecated metadata but useful fallback)
+        for light in &lights.data {
+            if let (Some(id), Some(metadata)) = (&light.id, &light.metadata) {
+                if let Some(name) = &metadata.name {
+                    name_map.insert(id.to_string(), name.to_string());
+                }
+            }
+        }
+
+        Ok(name_map)
     }
 
     /// Returns a stream of Hue events as JSON strings
@@ -213,12 +304,16 @@ impl ClientEx {
         let event_stream = lines.filter_map(|line_result| async move {
             let line: String = line_result.ok()?;
             if let Some(data) = line.strip_prefix("data: ") {
-                // Hue sends events as an array in the data field
-                // We flatten this array into individual events
-                if let Ok(events) = serde_json::from_str::<Vec<serde_json::Value>>(data) {
-                    return Some(futures::stream::iter(
-                        events.into_iter().map(|e: serde_json::Value| e.to_string()),
-                    ));
+                // Hue sends events as an array of update envelopes
+                if let Ok(envelopes) = serde_json::from_str::<Vec<serde_json::Value>>(data) {
+                    let mut all_updates = Vec::new();
+                    for mut env in envelopes {
+                        // Extract the resource updates from the "data" array in each envelope
+                        if let Some(updates) = env.get_mut("data").and_then(|d| d.as_array_mut()) {
+                            all_updates.extend(updates.drain(..).map(|u| u.to_string()));
+                        }
+                    }
+                    return Some(futures::stream::iter(all_updates));
                 }
             }
             None
