@@ -1,14 +1,40 @@
 use crate::hue::client::CompositeSensor;
 use dioxus::prelude::*;
+use std::cmp::Ordering;
 
 #[component]
 pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     let mut is_glowing = use_signal(|| false);
+    
+    // Store previous values to calculate trends
+    let mut last_temp = use_signal(|| None::<f64>);
+    let mut last_light = use_signal(|| None::<i32>);
+    let mut temp_trend = use_signal(|| Ordering::Equal);
+    let mut light_trend = use_signal(|| Ordering::Equal);
 
-    // Trigger glow effect on data change
+    // Trigger effects on data change
     use_effect(move || {
-        // We track the sensor prop. Read() will subscribe this effect to changes.
-        sensor.read();
+        let s = sensor.read();
+        
+        // Temperature trend calculation
+        if let Some(t) = &s.temperature {
+            if let Some(prev) = *last_temp.peek() {
+                if (t.temperature - prev).abs() > 0.01 {
+                    temp_trend.set(t.temperature.partial_cmp(&prev).unwrap_or(Ordering::Equal));
+                }
+            }
+            last_temp.set(Some(t.temperature));
+        }
+
+        // Light trend calculation
+        if let Some(l) = &s.light {
+            if let Some(prev) = *last_light.peek() {
+                if l.light_level != prev {
+                    light_trend.set(l.light_level.cmp(&prev));
+                }
+            }
+            last_light.set(Some(l.light_level));
+        }
         
         is_glowing.set(true);
         spawn(async move {
@@ -44,9 +70,15 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     };
 
     let glow_class = if is_glowing() {
-        "brightness-110 scale-[1.01] shadow-xl ring-2 ring-blue-400/50"
+        "brightness-125 scale-105 shadow-2xl ring-4 ring-blue-500 z-10"
     } else {
-        "brightness-100 scale-100 shadow-md ring-0 ring-transparent"
+        "brightness-100 scale-100 shadow-md ring-0 ring-transparent z-0"
+    };
+
+    let transition_class = if is_glowing() {
+        "transition-all duration-100 ease-out" // Fast "pop" in
+    } else {
+        "transition-all duration-700 ease-in-out" // Smooth fade out
     };
 
     let motion_class = if let Some(m) = &sensor_ref.motion {
@@ -61,7 +93,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
 
     rsx! {
         div {
-            class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} transition-all duration-500 ease-in-out",
+            class: "p-4 rounded-lg {border_class} {bg_class} {glow_class} {transition_class}",
             div {
                 class: "flex items-center justify-between mb-4",
                 h3 {
@@ -101,7 +133,15 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
                                 span { class: "text-gray-500", "Temp:" }
                                 div {
-                                    span { class: "font-semibold", "{t.temperature:.1}°C" }
+                                    span { 
+                                        class: "font-semibold", 
+                                        "{t.temperature:.1}°C"
+                                        match temp_trend() {
+                                            Ordering::Greater => rsx! { span { class: "text-red-500 ml-1 text-sm animate-pulse", "↑" } },
+                                            Ordering::Less => rsx! { span { class: "text-blue-500 ml-1 text-sm animate-pulse", "↓" } },
+                                            Ordering::Equal => rsx! { "" }
+                                        }
+                                    }
                                     span { class: "text-xs text-gray-400 ml-2", "@{time}" }
                                 }
                             }
@@ -117,7 +157,15 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
                                 span { class: "text-gray-500", "Light:" }
                                 div {
-                                    span { class: "font-semibold", "{l.light_level} lx" }
+                                    span { 
+                                        class: "font-semibold", 
+                                        "{l.light_level} lx"
+                                        match light_trend() {
+                                            Ordering::Greater => rsx! { span { class: "text-yellow-500 ml-1 text-sm animate-pulse", "↑" } },
+                                            Ordering::Less => rsx! { span { class: "text-gray-400 ml-1 text-sm animate-pulse", "↓" } },
+                                            Ordering::Equal => rsx! { "" }
+                                        }
+                                    }
                                     span { class: "text-xs text-gray-400 ml-2", "@{time}" }
                                 }
                             }
