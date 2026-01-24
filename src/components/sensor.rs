@@ -1,6 +1,8 @@
 use crate::hue::client::CompositeSensor;
+use crate::components::{Sparkline, HistoryPoint};
 use dioxus::prelude::*;
 use std::cmp::Ordering;
+use chrono::{Utc, Duration};
 
 #[component]
 pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
@@ -12,11 +14,26 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     let mut temp_trend = use_signal(|| Ordering::Equal);
     let mut light_trend = use_signal(|| Ordering::Equal);
 
+    // History for sparklines
+    let mut temp_history = use_signal(Vec::<HistoryPoint>::new);
+    let mut light_history = use_signal(Vec::<HistoryPoint>::new);
+    let mut motion_history = use_signal(Vec::<HistoryPoint>::new);
+
+    // Helper to update history and prune old data
+    let update_history = move |history: &mut Signal<Vec<HistoryPoint>>, val: f64| {
+        let now = Utc::now();
+        let limit = now - Duration::minutes(10);
+        history.with_mut(|h| {
+            h.push(HistoryPoint { value: val, time: now });
+            h.retain(|p| p.time >= limit);
+        });
+    };
+
     // Trigger effects on data change
     use_effect(move || {
         let s = sensor.read();
         
-        // Temperature trend calculation
+        // Temperature trend and history
         if let Some(t) = &s.temperature {
             if let Some(prev) = *last_temp.peek() {
                 if (t.temperature - prev).abs() > 0.01 {
@@ -24,9 +41,10 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                 }
             }
             last_temp.set(Some(t.temperature));
+            update_history(&mut temp_history, t.temperature);
         }
 
-        // Light trend calculation
+        // Light trend and history
         if let Some(l) = &s.light {
             if let Some(prev) = *last_light.peek() {
                 if l.light_level != prev {
@@ -34,6 +52,12 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                 }
             }
             last_light.set(Some(l.light_level));
+            update_history(&mut light_history, l.light_level as f64);
+        }
+
+        // Motion history
+        if let Some(m) = &s.motion {
+            update_history(&mut motion_history, if m.presence { 1.0 } else { 0.0 });
         }
         
         is_glowing.set(true);
@@ -44,6 +68,21 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
             gloo_timers::future::sleep(std::time::Duration::from_millis(500)).await;
             is_glowing.set(false);
         });
+    });
+
+    // Periodic refresh to keep sparklines scrolling even without events
+    use_future(move || async move {
+        loop {
+            #[cfg(feature = "server")]
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            #[cfg(not(feature = "server"))]
+            gloo_timers::future::sleep(std::time::Duration::from_secs(30)).await;
+            
+            // Just touching the histories to trigger re-render of sparklines
+            temp_history.read();
+            light_history.read();
+            motion_history.read();
+        }
     });
 
     let sensor_ref = sensor.read();
@@ -70,9 +109,9 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
     };
 
     let glow_class = if is_glowing() {
-        "brightness-125 scale-105 shadow-2xl ring-4 ring-blue-500 z-10"
+        "brightness-110 scale-[1.01] shadow-xl ring-2 ring-blue-400/50"
     } else {
-        "brightness-100 scale-100 shadow-md ring-0 ring-transparent z-0"
+        "brightness-100 scale-100 shadow-md ring-0 ring-transparent"
     };
 
     let transition_class = if is_glowing() {
@@ -117,8 +156,12 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
                                 span { class: "text-gray-500", "Motion:" }
                                 div {
-                                    span { class: "{motion_class}", "{status}" }
-                                    span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                    class: "flex items-center justify-between",
+                                    div {
+                                        span { class: "{motion_class}", "{status}" }
+                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                    }
+                                    Sparkline { history: motion_history, is_discrete: true, color: "#f87171" }
                                 }
                             }
                         }
@@ -133,16 +176,20 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
                                 span { class: "text-gray-500", "Temp:" }
                                 div {
-                                    span { 
-                                        class: "font-semibold", 
-                                        "{t.temperature:.1}°C"
-                                        match temp_trend() {
-                                            Ordering::Greater => rsx! { span { class: "text-red-500 ml-1 text-sm animate-pulse", "↑" } },
-                                            Ordering::Less => rsx! { span { class: "text-blue-500 ml-1 text-sm animate-pulse", "↓" } },
-                                            Ordering::Equal => rsx! { "" }
+                                    class: "flex items-center justify-between",
+                                    div {
+                                        span { 
+                                            class: "font-semibold", 
+                                            "{t.temperature:.1}°C"
+                                            match temp_trend() {
+                                                Ordering::Greater => rsx! { span { class: "text-red-500 ml-1 text-sm animate-pulse", "↑" } },
+                                                Ordering::Less => rsx! { span { class: "text-blue-500 ml-1 text-sm animate-pulse", "↓" } },
+                                                Ordering::Equal => rsx! { "" }
+                                            }
                                         }
+                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
                                     }
-                                    span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                    Sparkline { history: temp_history, color: "#60a5fa" }
                                 }
                             }
                         }
@@ -157,16 +204,20 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                 class: "text-lg grid grid-cols-[4.5rem_1fr] items-baseline",
                                 span { class: "text-gray-500", "Light:" }
                                 div {
-                                    span { 
-                                        class: "font-semibold", 
-                                        "{l.light_level} lx"
-                                        match light_trend() {
-                                            Ordering::Greater => rsx! { span { class: "text-yellow-500 ml-1 text-sm animate-pulse", "↑" } },
-                                            Ordering::Less => rsx! { span { class: "text-gray-400 ml-1 text-sm animate-pulse", "↓" } },
-                                            Ordering::Equal => rsx! { "" }
+                                    class: "flex items-center justify-between",
+                                    div {
+                                        span { 
+                                            class: "font-semibold", 
+                                            "{l.light_level} lx"
+                                            match light_trend() {
+                                                Ordering::Greater => rsx! { span { class: "text-yellow-500 ml-1 text-sm animate-pulse", "↑" } },
+                                                Ordering::Less => rsx! { span { class: "text-gray-400 ml-1 text-sm animate-pulse", "↓" } },
+                                                Ordering::Equal => rsx! { "" }
+                                            }
                                         }
+                                        span { class: "text-xs text-gray-400 ml-2", "@{time}" }
                                     }
-                                    span { class: "text-xs text-gray-400 ml-2", "@{time}" }
+                                    Sparkline { history: light_history, color: "#fbbf24" }
                                 }
                             }
                         }

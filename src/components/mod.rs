@@ -6,3 +6,6 @@ pub use sensor::Sensor;
 
 mod clock;
 pub use clock::Clock;
+
+mod sparkline;
+pub use sparkline::{Sparkline, HistoryPoint};
