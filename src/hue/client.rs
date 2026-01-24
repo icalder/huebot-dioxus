@@ -67,7 +67,6 @@ impl ClientEx {
 
     /// Fetch all sensors and group them by device into CompositeSensors
     pub async fn get_sensors(&self) -> Result<Vec<CompositeSensor>, Error<ErrorResponse>> {
-        // Fetch all sensor types and devices in parallel
         let (motion_res, temp_res, light_res, devices_res) = tokio::join!(
             self.inner.get_motion_sensors(),
             self.inner.get_temperatures(),
@@ -80,58 +79,17 @@ impl ClientEx {
         let light_response = light_res?;
         let devices_response = devices_res?;
 
-        // Map device IDs to their names and outdoor status
-        let mut device_map: HashMap<String, CompositeSensor> = devices_response
-            .data
-            .iter()
-            .filter_map(|d| {
-                let id = d.id.as_ref()?.to_string();
-                let name = d.metadata.as_ref()?.name.as_ref()?.to_string();
-                let is_outdoor = d
-                    .product_data
-                    .as_ref()
-                    .and_then(|pd| pd.product_name.as_ref())
-                    .map(|pn| pn.to_lowercase().contains("outdoor"))
-                    .unwrap_or(false);
-                Some((
-                    id.clone(),
-                    CompositeSensor {
-                        device_id: id,
-                        name,
-                        is_outdoor,
-                        motion: None,
-                        temperature: None,
-                        light: None,
-                    },
-                ))
-            })
-            .collect();
-
-        // Helper to get owner RID from ResourceOwned
-        let get_owner_rid = |owner: &Option<crate::hue::client::types::ResourceIdentifier>| {
-            owner
-                .as_ref()
-                .and_then(|o| o.rid.as_ref())
-                .map(|s| s.to_string())
-        };
-
-        // Helper to parse Hue date strings
-        let parse_date = |s: &Option<String>| {
-            s.as_ref()
-                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                .map(|dt| dt.with_timezone(&Utc))
-                .unwrap_or_else(Utc::now)
-        };
+        let mut device_map = self.init_device_map(&devices_response.data);
 
         // Populate motion data
         for m in &motion_response.data {
-            if let (Some(id), Some(owner_rid)) = (&m.id, get_owner_rid(&m.owner)) {
+            if let (Some(id), Some(owner_rid)) = (&m.id, Self::get_owner_rid(&m.owner)) {
                 if let Some(cs) = device_map.get_mut(&owner_rid) {
                     if let Some(report) = m.motion.as_ref().and_then(|m| m.motion_report.as_ref()) {
                         cs.motion = Some(MotionData {
                             id: id.to_string(),
                             presence: report.motion.unwrap_or(false),
-                            last_updated: parse_date(&report.changed),
+                            last_updated: Self::parse_date(&report.changed),
                         });
                     }
                 }
@@ -140,7 +98,7 @@ impl ClientEx {
 
         // Populate temperature data
         for t in &temp_response.data {
-            if let (Some(id), Some(owner_rid)) = (&t.id, get_owner_rid(&t.owner)) {
+            if let (Some(id), Some(owner_rid)) = (&t.id, Self::get_owner_rid(&t.owner)) {
                 if let Some(cs) = device_map.get_mut(&owner_rid) {
                     if let Some(report) = t
                         .temperature
@@ -159,7 +117,7 @@ impl ClientEx {
 
         // Populate light data
         for l in &light_response.data {
-            if let (Some(id), Some(owner_rid)) = (&l.id, get_owner_rid(&l.owner)) {
+            if let (Some(id), Some(owner_rid)) = (&l.id, Self::get_owner_rid(&l.owner)) {
                 if let Some(cs) = device_map.get_mut(&owner_rid) {
                     if let Some(report) = l.light.as_ref().and_then(|l| l.light_level_report.as_ref())
                     {
@@ -173,14 +131,12 @@ impl ClientEx {
             }
         }
 
-        // Filter out devices that don't have any sensor data
         let mut sensors: Vec<CompositeSensor> = device_map
             .into_values()
             .filter(|cs| cs.motion.is_some() || cs.temperature.is_some() || cs.light.is_some())
             .collect();
 
         sensors.sort_by(|a, b| {
-            // Sort by outdoor status (Outdoor first), then by name
             b.is_outdoor
                 .cmp(&a.is_outdoor)
                 .then_with(|| a.name.cmp(&b.name))
@@ -199,77 +155,45 @@ impl ClientEx {
             self.inner.get_bridge_homes(),
         );
 
-        let devices = devices_res?;
-        let rooms = rooms_res?;
-        let zones = zones_res?;
-        let lights = lights_res?;
-        let bridge_homes = bridge_homes_res?;
-
         let mut name_map = HashMap::new();
 
-        // Map devices and their services
-        for device in &devices.data {
-            if let (Some(id), Some(metadata)) = (&device.id, &device.metadata) {
-                if let Some(name) = &metadata.name {
-                    let name_str = name.to_string();
-                    name_map.insert(id.to_string(), name_str.clone());
-
-                    for service in &device.services {
-                        if let Some(rid) = &service.rid {
-                            name_map.insert(rid.to_string(), name_str.clone());
-                        }
-                    }
-                }
-            }
+        for device in &devices_res?.data {
+            Self::insert_resource_names(
+                &mut name_map,
+                device.id.as_ref().map(|id| id.to_string()),
+                device.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                &device.services,
+            );
         }
 
-        // Map rooms
-        for room in &rooms.data {
-            if let (Some(id), Some(metadata)) = (&room.id, &room.metadata) {
-                if let Some(name) = &metadata.name {
-                    let name_str = name.to_string();
-                    name_map.insert(id.to_string(), name_str.clone());
-
-                    for service in &room.services {
-                        if let Some(rid) = &service.rid {
-                            name_map.insert(rid.to_string(), name_str.clone());
-                        }
-                    }
-                }
-            }
+        for room in &rooms_res?.data {
+            Self::insert_resource_names(
+                &mut name_map,
+                room.id.as_ref().map(|id| id.to_string()),
+                room.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                &room.services,
+            );
         }
 
-        // Map zones
-        for zone in &zones.data {
-            if let (Some(id), Some(metadata)) = (&zone.id, &zone.metadata) {
-                if let Some(name) = &metadata.name {
-                    let name_str = name.to_string();
-                    name_map.insert(id.to_string(), name_str.clone());
-
-                    for service in &zone.services {
-                        if let Some(rid) = &service.rid {
-                            name_map.insert(rid.to_string(), name_str.clone());
-                        }
-                    }
-                }
-            }
+        for zone in &zones_res?.data {
+            Self::insert_resource_names(
+                &mut name_map,
+                zone.id.as_ref().map(|id| id.to_string()),
+                zone.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                &zone.services,
+            );
         }
 
-        // Map bridge homes (whole house)
-        for home in &bridge_homes.data {
-            if let Some(id) = &home.id {
-                let name = "Bridge Home".to_string();
-                name_map.insert(id.to_string(), name.clone());
-                for service in &home.services {
-                    if let Some(rid) = &service.rid {
-                        name_map.insert(rid.to_string(), name.clone());
-                    }
-                }
-            }
+        for home in &bridge_homes_res?.data {
+            Self::insert_resource_names(
+                &mut name_map,
+                home.id.as_ref().map(|id| id.to_string()),
+                Some("Bridge Home".to_string()),
+                &home.services,
+            );
         }
 
-        // Map lights (deprecated metadata but useful fallback)
-        for light in &lights.data {
+        for light in &lights_res?.data {
             if let (Some(id), Some(metadata)) = (&light.id, &light.metadata) {
                 if let Some(name) = &metadata.name {
                     name_map.insert(id.to_string(), name.to_string());
@@ -304,11 +228,9 @@ impl ClientEx {
         let event_stream = lines.filter_map(|line_result| async move {
             let line: String = line_result.ok()?;
             if let Some(data) = line.strip_prefix("data: ") {
-                // Hue sends events as an array of update envelopes
                 if let Ok(envelopes) = serde_json::from_str::<Vec<serde_json::Value>>(data) {
                     let mut all_updates = Vec::new();
                     for mut env in envelopes {
-                        // Extract the resource updates from the "data" array in each envelope
                         if let Some(updates) = env.get_mut("data").and_then(|d| d.as_array_mut()) {
                             all_updates.extend(updates.drain(..).map(|u| u.to_string()));
                         }
@@ -320,5 +242,66 @@ impl ClientEx {
         });
 
         Ok(event_stream.flatten())
+    }
+
+    // --- Private Helpers ---
+
+    fn parse_date(s: &Option<String>) -> DateTime<Utc> {
+        s.as_ref()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|dt| dt.with_timezone(&Utc))
+            .unwrap_or_else(Utc::now)
+    }
+
+    fn get_owner_rid(
+        owner: &Option<crate::hue::client::types::ResourceIdentifier>,
+    ) -> Option<String> {
+        owner.as_ref().and_then(|o| o.rid.as_ref()).map(|s| s.to_string())
+    }
+
+    fn init_device_map(
+        &self,
+        devices: &[crate::hue::client::types::GetDevicesResponseDataItem],
+    ) -> HashMap<String, CompositeSensor> {
+        devices
+            .iter()
+            .filter_map(|d| {
+                let id = d.id.as_ref()?.to_string();
+                let name = d.metadata.as_ref()?.name.as_ref()?.to_string();
+                let is_outdoor = d
+                    .product_data
+                    .as_ref()
+                    .and_then(|pd| pd.product_name.as_ref())
+                    .map(|pn| pn.to_lowercase().contains("outdoor"))
+                    .unwrap_or(false);
+                Some((
+                    id.clone(),
+                    CompositeSensor {
+                        device_id: id,
+                        name,
+                        is_outdoor,
+                        motion: None,
+                        temperature: None,
+                        light: None,
+                    },
+                ))
+            })
+            .collect()
+    }
+
+    fn insert_resource_names(
+        map: &mut HashMap<String, String>,
+        id: Option<String>,
+        name: Option<String>,
+        services: &[crate::hue::client::types::ResourceIdentifier],
+    ) {
+        if let (Some(id), Some(name)) = (id, name) {
+            map.insert(id, name.clone());
+            for service in services {
+                if let Some(rid) = &service.rid {
+                    map.insert(rid.to_string(), name.clone());
+                }
+            }
+        }
     }
 }
