@@ -203,7 +203,6 @@ pub fn use_hue_event_handler(
                 return;
             }
 
-            use futures::StreamExt;
             loop {
                 match hue_events().await {
                     Ok(mut stream) => {
