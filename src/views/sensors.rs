@@ -17,45 +17,48 @@ pub fn Sensors() -> Element {
     let mut last_global_update = use_signal(Utc::now);
 
     use_resource(move || async move {
-        match hue_events().await {
-            Ok(mut stream) => {
-                while let Some(Ok(event_str_raw)) = stream.next().await {
-                    let event_str: String = event_str_raw;
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
-                        let owner_rid = v
-                            .get("owner")
-                            .and_then(|o| o.get("rid"))
-                            .and_then(|rid| rid.as_str());
-                        let resource_id = v.get("id").and_then(|id| id.as_str());
+        loop {
+            match hue_events().await {
+                Ok(mut stream) => {
+                    while let Some(Ok(event_str_raw)) = stream.next().await {
+                        let event_str: String = event_str_raw;
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
+                            let owner_rid = v
+                                .get("owner")
+                                .and_then(|o| o.get("rid"))
+                                .and_then(|rid| rid.as_str());
+                            let resource_id = v.get("id").and_then(|id| id.as_str());
 
-                        let mut updated = false;
-                        sensors.with_mut(|list: &mut Vec<CompositeSensor>| {
-                            for s in list.iter_mut() {
-                                // Update if the event belongs to this device (via owner)
-                                // or matches a known resource ID already attached to this sensor
-                                let is_owner = owner_rid == Some(&s.device_id);
-                                let matches_resource = resource_id.is_some()
-                                    && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
-                                        || s.temperature.as_ref().map(|t| t.id.as_str())
-                                            == resource_id
-                                        || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
+                            let mut updated = false;
+                            sensors.with_mut(|list: &mut Vec<CompositeSensor>| {
+                                for s in list.iter_mut() {
+                                    // Update if the event belongs to this device (via owner)
+                                    // or matches a known resource ID already attached to this sensor
+                                    let is_owner = owner_rid == Some(&s.device_id);
+                                    let matches_resource = resource_id.is_some()
+                                        && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
+                                            || s.temperature.as_ref().map(|t| t.id.as_str())
+                                                == resource_id
+                                            || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
 
-                                if is_owner || matches_resource {
-                                    s.update_from_json(&v);
-                                    updated = true;
+                                    if is_owner || matches_resource {
+                                        s.update_from_json(&v);
+                                        updated = true;
+                                    }
                                 }
-                            }
-                        });
+                            });
 
-                        if updated {
-                            last_global_update.set(Utc::now());
+                            if updated {
+                                last_global_update.set(Utc::now());
+                            }
                         }
                     }
                 }
+                Err(e) => {
+                    println!("Error connecting to event stream: {}", e);
+                }
             }
-            Err(e) => {
-                println!("Error connecting to event stream: {}", e);
-            }
+            gloo_timers::future::TimeoutFuture::new(1000).await;
         }
     });
 
