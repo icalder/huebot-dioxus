@@ -6,13 +6,10 @@ use std::collections::HashMap;
 #[server]
 pub async fn get_device_names() -> Result<HashMap<String, String>, ServerFnError> {
     let client = crate::hue::get_hue_client();
-    let names: HashMap<String, String> = client
-        .get_name_map()
-        .await
-        .map_err(|e| {
-            let msg = e.to_string();
-            ServerFnError::new(if msg.len() > 100 { &msg[..100] } else { &msg })
-        })?;
+    let names: HashMap<String, String> = client.get_name_map().await.map_err(|e| {
+        let msg = e.to_string();
+        ServerFnError::new(if msg.len() > 100 { &msg[..100] } else { &msg })
+    })?;
     Ok(names)
 }
 
@@ -24,19 +21,22 @@ pub fn EventLog() -> Element {
     use_resource(move || async move {
         match hue_events().await {
             Ok(mut stream) => {
-                use futures::StreamExt;
                 while let Some(Ok(event_str)) = stream.next().await {
                     let event: String = event_str;
-                    let v: serde_json::Value = serde_json::from_str(&event).unwrap_or(serde_json::Value::Null);
-                    
+                    let v: serde_json::Value =
+                        serde_json::from_str(&event).unwrap_or(serde_json::Value::Null);
+
                     // Try to extract the resource ID or the owner ID
                     let id = v.get("id").and_then(|id| id.as_str());
-                    let owner_rid = v.get("owner").and_then(|o| o.get("rid")).and_then(|rid| rid.as_str());
+                    let owner_rid = v
+                        .get("owner")
+                        .and_then(|o| o.get("rid"))
+                        .and_then(|rid| rid.as_str());
 
                     let device_name = {
                         let names_ready = names.read();
                         let map = names_ready.as_ref().and_then(|res| res.as_ref().ok());
-                        
+
                         if let Some(map) = map {
                             if let Some(id) = id {
                                 if let Some(name) = map.get(id) {
@@ -79,27 +79,20 @@ pub fn EventLog() -> Element {
     });
 
     rsx! {
-        div {
-            class: "container mx-auto p-4",
-            div {
-                class: "flex justify-between items-baseline mb-4",
+        div { class: "container mx-auto p-4",
+            div { class: "flex justify-between items-baseline mb-4",
                 h1 { class: "text-2xl font-bold", "Hue Event Log (Streaming)" }
                 Clock {}
             }
-            div {
-                class: "bg-black text-gray-300 p-4 rounded-lg font-mono text-xs h-[32rem] overflow-y-auto",
-                for (name, event) in events.read().iter().rev() {
-                    div { 
-                        class: "flex gap-4 mb-2 border-b border-gray-800 pb-2",
-                        span { 
+            div { class: "bg-black text-gray-300 p-4 rounded-lg font-mono text-xs h-[32rem] overflow-y-auto",
+                for (name , event) in events.read().iter().rev() {
+                    div { class: "flex gap-4 mb-2 border-b border-gray-800 pb-2",
+                        span {
                             class: "w-32 flex-shrink-0 text-blue-400 font-bold truncate",
                             title: "{name}",
-                            "{name}" 
+                            "{name}"
                         }
-                        span { 
-                            class: "flex-grow break-all text-green-500/80",
-                            "{event}" 
-                        }
+                        span { class: "flex-grow break-all text-green-500/80", "{event}" }
                     }
                 }
             }
