@@ -146,3 +146,58 @@ pub async fn hue_events() -> Result<dioxus::fullstack::TextStream, ServerFnError
 
     Ok(dioxus::fullstack::TextStream::new(stream))
 }
+
+pub fn use_hue_event_handler(
+    on_event: impl FnMut(String) + 'static,
+    on_error: impl FnMut(String) + 'static,
+) {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    let on_event = Rc::new(RefCell::new(Some(on_event)));
+    let on_error = Rc::new(RefCell::new(Some(on_error)));
+
+    use_resource(move || {
+        use futures::StreamExt;
+        let on_event = on_event.clone();
+        let on_error = on_error.clone();
+        async move {
+            loop {
+                // Check if page is hidden (backgrounded) to avoid spamming reconnects
+                let is_hidden = if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        doc.hidden()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if is_hidden {
+                    gloo_timers::future::TimeoutFuture::new(5000).await;
+                    continue;
+                }
+
+                match hue_events().await {
+                    Ok(mut stream) => {
+                        while let Some(Ok(event_str)) = stream.next().await {
+                            if let Some(ref mut handler) = *on_event.borrow_mut() {
+                                handler(event_str);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        if !msg.contains("Failed to fetch") {
+                            if let Some(ref mut handler) = *on_error.borrow_mut() {
+                                handler(msg);
+                            }
+                        }
+                    }
+                }
+                gloo_timers::future::TimeoutFuture::new(1000).await;
+            }
+        }
+    });
+}

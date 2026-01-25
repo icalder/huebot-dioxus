@@ -2598,6 +2598,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "web-sys",
 ]
 
 [[package]]
