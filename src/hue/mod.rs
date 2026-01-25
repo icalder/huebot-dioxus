@@ -199,35 +199,38 @@ pub fn use_hue_event_handler(
         let visible = is_visible();
 
         async move {
-            if !visible {
-                return;
-            }
+            #[cfg(feature = "web")]
+            {
+                if !visible {
+                    return;
+                }
 
-            loop {
-                match hue_events().await {
-                    Ok(mut stream) => {
-                        while let Some(Ok(event_str)) = stream.next().await {
-                            if let Some(ref mut handler) = *on_event.borrow_mut() {
-                                handler(event_str);
+                loop {
+                    match hue_events().await {
+                        Ok(mut stream) => {
+                            while let Some(Ok(event_str)) = stream.next().await {
+                                if let Some(ref mut handler) = *on_event.borrow_mut() {
+                                    handler(event_str);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let msg = e.to_string();
+                            if let Some(ref mut handler) = *on_error.borrow_mut() {
+                                handler(msg);
                             }
                         }
                     }
-                    Err(e) => {
-                        let msg = e.to_string();
-                        if let Some(ref mut handler) = *on_error.borrow_mut() {
-                            handler(msg);
-                        }
-                    }
-                }
-                gloo_timers::future::TimeoutFuture::new(1000).await;
+                    gloo_timers::future::TimeoutFuture::new(1000).await;
 
-                // Re-check visibility before looping
-                if !web_sys::window()
-                    .and_then(|w| w.document())
-                    .map(|d| !d.hidden())
-                    .unwrap_or(true)
-                {
-                    break;
+                    // Re-check visibility before looping
+                    if !web_sys::window()
+                        .and_then(|w| w.document())
+                        .map(|d| !d.hidden())
+                        .unwrap_or(true)
+                    {
+                        break;
+                    }
                 }
             }
         }

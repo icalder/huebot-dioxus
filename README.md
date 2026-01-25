@@ -99,6 +99,28 @@ You can build a container image for the application using Nix. This creates a la
     podman push icalder/huebot:latest
     ```
 
+### Multi-Architecture Builds
+
+The project supports cross-compiling to `aarch64-linux` (e.g., for Raspberry Pi) directly from an `x86_64-linux` host using Nix. A `Makefile` is provided to automate the process.
+
+1.  **Build and push the multi-arch manifest:**
+    ```bash
+    make release
+    ```
+    This will clean old artifacts, build the images for both architectures, load them into Podman, create a manifest, and push it to Docker Hub.
+
+2.  **Individual steps:**
+    - `make build`: Build the images using Nix.
+    - `make load`: Load built images into Podman.
+    - `make manifest`: Create the multi-arch manifest locally.
+    - `make push`: Push the manifest to Docker Hub.
+
+3.  **Customization:**
+    You can override the image name and version:
+    ```bash
+    make release IMAGE_NAME=myuser/myrepo VERSION=1.0.0
+    ```
+
 ### TODO
 
   Here is a summary of the changes:
