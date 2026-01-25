@@ -157,28 +157,54 @@ pub fn use_hue_event_handler(
     let on_event = Rc::new(RefCell::new(Some(on_event)));
     let on_error = Rc::new(RefCell::new(Some(on_error)));
 
+    let mut is_visible = use_signal(|| {
+        #[cfg(feature = "web")]
+        {
+            web_sys::window()
+                .and_then(|w| w.document())
+                .map(|d| !d.hidden())
+                .unwrap_or(true)
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            true
+        }
+    });
+
+    let _listener = use_hook(|| {
+        #[cfg(feature = "web")]
+        {
+            let document = web_sys::window().unwrap().document().unwrap();
+            Rc::new(gloo_events::EventListener::new(
+                &document,
+                "visibilitychange",
+                move |_| {
+                    let hidden = web_sys::window()
+                        .and_then(|w| w.document())
+                        .map(|d| d.hidden())
+                        .unwrap_or(false);
+                    is_visible.set(!hidden);
+                },
+            ))
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            Rc::new(())
+        }
+    });
+
     use_resource(move || {
-        use futures::StreamExt;
         let on_event = on_event.clone();
         let on_error = on_error.clone();
+        let visible = is_visible();
+
         async move {
+            if !visible {
+                return;
+            }
+
+            use futures::StreamExt;
             loop {
-                // Check if page is hidden (backgrounded) to avoid spamming reconnects
-                let is_hidden = if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        doc.hidden()
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                if is_hidden {
-                    gloo_timers::future::TimeoutFuture::new(5000).await;
-                    continue;
-                }
-
                 match hue_events().await {
                     Ok(mut stream) => {
                         while let Some(Ok(event_str)) = stream.next().await {
@@ -189,14 +215,21 @@ pub fn use_hue_event_handler(
                     }
                     Err(e) => {
                         let msg = e.to_string();
-                        if !msg.contains("Failed to fetch") {
-                            if let Some(ref mut handler) = *on_error.borrow_mut() {
-                                handler(msg);
-                            }
+                        if let Some(ref mut handler) = *on_error.borrow_mut() {
+                            handler(msg);
                         }
                     }
                 }
                 gloo_timers::future::TimeoutFuture::new(1000).await;
+
+                // Re-check visibility before looping
+                if !web_sys::window()
+                    .and_then(|w| w.document())
+                    .map(|d| !d.hidden())
+                    .unwrap_or(true)
+                {
+                    break;
+                }
             }
         }
     });
