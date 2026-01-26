@@ -8,7 +8,7 @@ mod clock;
 pub use clock::Clock;
 
 mod sparkline;
-pub use sparkline::{Sparkline, HistoryPoint};
+pub use sparkline::{HistoryPoint, Sparkline};
 
 mod sensor_data_graph;
 pub use sensor_data_graph::SensorDataGraph;

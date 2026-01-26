@@ -1,40 +1,28 @@
+use crate::components::{HistoryPoint, Sparkline};
 use crate::hue::client::CompositeSensor;
-use crate::components::{Sparkline, HistoryPoint};
 use crate::Route;
+use chrono::Utc;
 use dioxus::prelude::*;
 use std::cmp::Ordering;
-use chrono::{Utc, Duration};
 
 #[component]
-pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
+pub fn Sensor(sensor: CompositeSensor) -> Element {
     let mut is_glowing = use_signal(|| false);
-    
+    let mut dummy_trigger = use_signal(|| 0);
+
     // Store previous values to calculate trends
     let mut last_temp = use_signal(|| None::<f64>);
     let mut last_light = use_signal(|| None::<i32>);
     let mut temp_trend = use_signal(|| Ordering::Equal);
     let mut light_trend = use_signal(|| Ordering::Equal);
 
-    // History for sparklines
-    let mut temp_history = use_signal(Vec::<HistoryPoint>::new);
-    let mut light_history = use_signal(Vec::<HistoryPoint>::new);
-    let mut motion_history = use_signal(Vec::<HistoryPoint>::new);
-
-    // Helper to update history and prune old data
-    let update_history = move |history: &mut Signal<Vec<HistoryPoint>>, val: f64| {
-        let now = Utc::now();
-        let limit = now - Duration::minutes(10);
-        history.with_mut(|h| {
-            h.push(HistoryPoint { value: val, time: now });
-            h.retain(|p| p.time >= limit);
-        });
-    };
-
-    // Trigger effects on data change
+    // Trigger effects on data change for trends and glowing only
+    // Note: this effect now depends on the 'sensor' prop value
+    let s_effect = sensor.clone();
     use_effect(move || {
-        let s = sensor.read();
-        
-        // Temperature trend and history
+        let s = s_effect.clone();
+
+        // Temperature trend
         if let Some(t) = &s.temperature {
             if let Some(prev) = *last_temp.peek() {
                 if (t.temperature - prev).abs() > 0.01 {
@@ -42,10 +30,9 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                 }
             }
             last_temp.set(Some(t.temperature));
-            update_history(&mut temp_history, t.temperature);
         }
 
-        // Light trend and history
+        // Light trend
         if let Some(l) = &s.light {
             if let Some(prev) = *last_light.peek() {
                 if l.light_level != prev {
@@ -53,14 +40,8 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                 }
             }
             last_light.set(Some(l.light_level));
-            update_history(&mut light_history, l.light_level as f64);
         }
 
-        // Motion history
-        if let Some(m) = &s.motion {
-            update_history(&mut motion_history, if m.presence { 1.0 } else { 0.0 });
-        }
-        
         is_glowing.set(true);
         spawn(async move {
             #[cfg(feature = "server")]
@@ -71,22 +52,86 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
         });
     });
 
-    // Periodic refresh to keep sparklines scrolling even without events
+    // Periodic refresh to keep sparklines scrolling
     use_future(move || async move {
         loop {
             #[cfg(feature = "server")]
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             #[cfg(not(feature = "server"))]
             gloo_timers::future::sleep(std::time::Duration::from_secs(30)).await;
-            
-            // Just touching the histories to trigger re-render of sparklines
-            temp_history.read();
-            light_history.read();
-            motion_history.read();
+
+            // Re-render by incrementing dummy trigger
+            *dummy_trigger.write() += 1;
         }
     });
 
-    let sensor_ref = sensor.read();
+    let sensor_ref = sensor;
+
+    // Memos replaced with direct calculation
+    let motion_history = {
+        let h = sensor_ref
+            .motion
+            .as_ref()
+            .map(|m| &m.history)
+            .cloned()
+            .unwrap_or_default();
+        let mut points: Vec<HistoryPoint> = h
+            .into_iter()
+            .map(|(t, v)| HistoryPoint {
+                time: t,
+                value: if v { 1.0 } else { 0.0 },
+            })
+            .collect();
+        if let Some(last) = points.last() {
+            points.push(HistoryPoint {
+                time: Utc::now(),
+                value: last.value,
+            });
+        }
+        points
+    };
+    let temp_history = {
+        let h = sensor_ref
+            .temperature
+            .as_ref()
+            .map(|t| &t.history)
+            .cloned()
+            .unwrap_or_default();
+        let mut points: Vec<HistoryPoint> = h
+            .into_iter()
+            .map(|(t, v)| HistoryPoint { time: t, value: v })
+            .collect();
+        if let Some(last) = points.last() {
+            points.push(HistoryPoint {
+                time: Utc::now(),
+                value: last.value,
+            });
+        }
+        points
+    };
+    let light_history = {
+        let h = sensor_ref
+            .light
+            .as_ref()
+            .map(|l| &l.history)
+            .cloned()
+            .unwrap_or_default();
+        let mut points: Vec<HistoryPoint> = h
+            .into_iter()
+            .map(|(t, v)| HistoryPoint {
+                time: t,
+                value: v as f64,
+            })
+            .collect();
+        if let Some(last) = points.last() {
+            points.push(HistoryPoint {
+                time: Utc::now(),
+                value: last.value,
+            });
+        }
+        points
+    };
+
     let name_lower = sensor_ref.name.to_lowercase();
     let (border_class, bg_class, icon) = if sensor_ref.is_outdoor {
         (
@@ -165,7 +210,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                         "{icon}"
                     }
                 }
-                
+
                 div {
                     class: "space-y-1",
                     if let Some(m) = &sensor_ref.motion {
@@ -188,7 +233,7 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                             }
                         }
                     }
-                    
+
                     if let Some(t) = &sensor_ref.temperature {
                         {
                             let time = t.last_updated.with_timezone(&chrono::Local).format("%H:%M:%S");
@@ -201,8 +246,8 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                     div {
                                         class: "flex items-center justify-between",
                                         div {
-                                            span { 
-                                                class: "{value_class}", 
+                                            span {
+                                                class: "{value_class}",
                                                 "{value_text}"
                                                 if t.enabled {
                                                     match temp_trend() {
@@ -233,8 +278,8 @@ pub fn Sensor(sensor: ReadSignal<CompositeSensor>) -> Element {
                                     div {
                                         class: "flex items-center justify-between",
                                         div {
-                                            span { 
-                                                class: "{value_class}", 
+                                            span {
+                                                class: "{value_class}",
                                                 "{value_text}"
                                                 if l.enabled {
                                                     match light_trend() {

@@ -1,5 +1,5 @@
+use chrono::{DateTime, Duration, Utc};
 use dioxus::prelude::*;
-use chrono::{DateTime, Utc, Duration};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistoryPoint {
@@ -9,13 +9,13 @@ pub struct HistoryPoint {
 
 #[component]
 pub fn Sparkline(
-    history: ReadSignal<Vec<HistoryPoint>>,
+    history: Vec<HistoryPoint>,
     #[props(default = 100)] width: u32,
     #[props(default = 24)] height: u32,
     #[props(default = false)] is_discrete: bool,
     color: String,
 ) -> Element {
-    let points = history.read();
+    let points = history;
     if points.len() < 2 {
         return rsx! {
             svg { width, height, class: "opacity-20",
@@ -26,7 +26,7 @@ pub fn Sparkline(
 
     let now = Utc::now();
     let ten_mins_ago = now - Duration::minutes(10);
-    
+
     // Normalize X (time)
     let x_scale = |t: DateTime<Utc>| {
         let elapsed = (t - ten_mins_ago).num_seconds() as f64;
@@ -41,8 +41,12 @@ pub fn Sparkline(
         let mut min = points[0].value;
         let mut max = points[0].value;
         for p in points.iter() {
-            if p.value < min { min = p.value; }
-            if p.value > max { max = p.value; }
+            if p.value < min {
+                min = p.value;
+            }
+            if p.value > max {
+                max = p.value;
+            }
         }
         // Add a bit of padding to the range
         if (max - min).abs() < 0.1 {
@@ -63,14 +67,24 @@ pub fn Sparkline(
         let x = x_scale(p.time);
         let y = y_scale(p.value);
         if i == 0 {
-            path_data.push_str(&format!("M {} {}", x, y));
+            // Start the path at x=0 with the first point's value
+            path_data.push_str(&format!("M 0 {} ", y));
+            if x > 0.0 {
+                path_data.push_str(&format!("L {} {} ", x, y));
+            }
         } else if is_discrete {
             // Step function for discrete values (motion)
-            let prev_y = y_scale(points[i-1].value);
+            let prev_y = y_scale(points[i - 1].value);
             path_data.push_str(&format!(" L {} {}", x, prev_y));
             path_data.push_str(&format!(" L {} {}", x, y));
         } else {
             path_data.push_str(&format!(" L {} {}", x, y));
+        }
+
+        // If this is the last point and it's before the end of the window,
+        // extend it to the edge.
+        if i == points.len() - 1 && x < width as f64 {
+            path_data.push_str(&format!(" L {} {}", width, y));
         }
     }
 

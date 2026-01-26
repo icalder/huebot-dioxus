@@ -18,6 +18,7 @@ pub fn EventLog() -> Element {
     let names = use_resource(get_device_names);
 
     crate::hue::use_hue_event_handler(
+        false,
         move |event| {
             let v: serde_json::Value =
                 serde_json::from_str(&event).unwrap_or(serde_json::Value::Null);

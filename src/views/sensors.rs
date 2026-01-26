@@ -16,6 +16,7 @@ pub fn Sensors() -> Element {
     let mut last_global_update = use_signal(Utc::now);
 
     crate::hue::use_hue_event_handler(
+        false,
         move |event_str| {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
                 let owner_rid = v

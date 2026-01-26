@@ -23,6 +23,8 @@ pub struct MotionData {
     pub enabled: bool,
     pub presence: bool,
     pub last_updated: DateTime<Utc>,
+    #[serde(default)]
+    pub history: Vec<(DateTime<Utc>, bool)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,6 +34,8 @@ pub struct TemperatureData {
     pub enabled: bool,
     pub temperature: f64,
     pub last_updated: DateTime<Utc>,
+    #[serde(default)]
+    pub history: Vec<(DateTime<Utc>, f64)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -41,6 +45,8 @@ pub struct LightData {
     pub enabled: bool,
     pub light_level: i32,
     pub last_updated: DateTime<Utc>,
+    #[serde(default)]
+    pub history: Vec<(DateTime<Utc>, i32)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -57,20 +63,44 @@ pub struct CompositeSensor {
 impl CompositeSensor {
     pub fn update_from_json(&mut self, v: &serde_json::Value) {
         let event_type = v.get("type").and_then(|t| t.as_str());
-        let id = v.get("id").and_then(|id| id.as_str()).unwrap_or_default().to_string();
-        let id_v1 = v.get("id_v1").and_then(|id| id.as_str()).map(|s| s.to_string());
+        let id = v
+            .get("id")
+            .and_then(|id| id.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let id_v1 = v
+            .get("id_v1")
+            .and_then(|id| id.as_str())
+            .map(|s| s.to_string());
         let enabled = v.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true);
 
         match event_type {
             Some("motion") => {
                 if let Some(report) = v.get("motion").and_then(|m| m.get("motion_report")) {
-                    self.motion = Some(MotionData {
+                    let presence = report
+                        .get("motion")
+                        .and_then(|m| m.as_bool())
+                        .unwrap_or(false);
+                    let last_updated = ClientEx::parse_date(
+                        &report
+                            .get("changed")
+                            .and_then(|c| c.as_str())
+                            .map(|s| s.to_string()),
+                    );
+                    let mut motion = MotionData {
                         id,
                         id_v1,
                         enabled,
-                        presence: report.get("motion").and_then(|m| m.as_bool()).unwrap_or(false),
-                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
-                    });
+                        presence,
+                        last_updated,
+                        history: self
+                            .motion
+                            .as_ref()
+                            .map(|m| m.history.clone())
+                            .unwrap_or_default(),
+                    };
+                    Self::update_history(&mut motion.history, last_updated, presence);
+                    self.motion = Some(motion);
                 } else if v.get("enabled").is_some() {
                     if let Some(m) = &mut self.motion {
                         m.enabled = enabled;
@@ -78,14 +108,34 @@ impl CompositeSensor {
                 }
             }
             Some("temperature") => {
-                if let Some(report) = v.get("temperature").and_then(|t| t.get("temperature_report")) {
-                    self.temperature = Some(TemperatureData {
+                if let Some(report) = v
+                    .get("temperature")
+                    .and_then(|t| t.get("temperature_report"))
+                {
+                    let temperature = report
+                        .get("temperature")
+                        .and_then(|t| t.as_f64())
+                        .unwrap_or(0.0);
+                    let last_updated = ClientEx::parse_date(
+                        &report
+                            .get("changed")
+                            .and_then(|c| c.as_str())
+                            .map(|s| s.to_string()),
+                    );
+                    let mut temp = TemperatureData {
                         id,
                         id_v1,
                         enabled,
-                        temperature: report.get("temperature").and_then(|t| t.as_f64()).unwrap_or(0.0),
-                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
-                    });
+                        temperature,
+                        last_updated,
+                        history: self
+                            .temperature
+                            .as_ref()
+                            .map(|t| t.history.clone())
+                            .unwrap_or_default(),
+                    };
+                    Self::update_history(&mut temp.history, last_updated, temperature);
+                    self.temperature = Some(temp);
                 } else if v.get("enabled").is_some() {
                     if let Some(t) = &mut self.temperature {
                         t.enabled = enabled;
@@ -94,13 +144,31 @@ impl CompositeSensor {
             }
             Some("light_level") => {
                 if let Some(report) = v.get("light").and_then(|l| l.get("light_level_report")) {
-                    self.light = Some(LightData {
+                    let light_level = report
+                        .get("light_level")
+                        .and_then(|l| l.as_i64())
+                        .map(|v| v as i32)
+                        .unwrap_or(0);
+                    let last_updated = ClientEx::parse_date(
+                        &report
+                            .get("changed")
+                            .and_then(|c| c.as_str())
+                            .map(|s| s.to_string()),
+                    );
+                    let mut light = LightData {
                         id,
                         id_v1,
                         enabled,
-                        light_level: report.get("light_level").and_then(|l| l.as_i64()).map(|v| v as i32).unwrap_or(0),
-                        last_updated: ClientEx::parse_date(&report.get("changed").and_then(|c| c.as_str()).map(|s| s.to_string())),
-                    });
+                        light_level,
+                        last_updated,
+                        history: self
+                            .light
+                            .as_ref()
+                            .map(|l| l.history.clone())
+                            .unwrap_or_default(),
+                    };
+                    Self::update_history(&mut light.history, last_updated, light_level);
+                    self.light = Some(light);
                 } else if v.get("enabled").is_some() {
                     if let Some(l) = &mut self.light {
                         l.enabled = enabled;
@@ -112,9 +180,41 @@ impl CompositeSensor {
 
         // Update overall enabled state: if any sensor service is enabled, the composite is considered enabled.
         // Usually they are all enabled/disabled together if it's the main "sensor" switch.
-        self.enabled = self.motion.as_ref().map(|m| m.enabled).unwrap_or(true) 
+        self.enabled = self.motion.as_ref().map(|m| m.enabled).unwrap_or(true)
             && self.temperature.as_ref().map(|t| t.enabled).unwrap_or(true)
             && self.light.as_ref().map(|l| l.enabled).unwrap_or(true);
+    }
+
+    fn update_history<T: PartialEq + Clone + std::fmt::Display>(
+        history: &mut Vec<(DateTime<Utc>, T)>,
+        time: DateTime<Utc>,
+        val: T,
+    ) {
+        if !history.iter().any(|(t, _)| *t == time) {
+            history.push((time, val));
+        }
+        history.sort_by_key(|(t, _)| *t);
+
+        let limit = Utc::now() - chrono::Duration::minutes(15);
+
+        // Find the index of the first point that is within the limit
+        let cutoff_index = history.iter().position(|(t, _)| *t >= limit);
+
+        if let Some(idx) = cutoff_index {
+            // If there are points older than the limit, we want to keep the one immediately preceding the cutoff
+            // as an anchor for the graph rendering (so we know the value at the start of the window).
+            // So we remove everything before (idx - 1).
+            if idx > 0 {
+                history.drain(0..(idx - 1));
+            }
+        } else {
+            // All points are older than the limit.
+            // Keep only the last one (most recent state).
+            if history.len() > 1 {
+                let keep = history.len() - 1;
+                history.drain(0..keep);
+            }
+        }
     }
 }
 
@@ -147,7 +247,10 @@ impl ClientEx {
     fn get_owner_rid(
         owner: &Option<crate::hue::client::types::ResourceIdentifier>,
     ) -> Option<String> {
-        owner.as_ref().and_then(|o| o.rid.as_ref()).map(|s| s.to_string())
+        owner
+            .as_ref()
+            .and_then(|o| o.rid.as_ref())
+            .map(|s| s.to_string())
     }
 }
 
@@ -170,21 +273,33 @@ impl ClientEx {
         let mut attempts = 0;
         loop {
             // Acquire semaphore permit before making the request
-            let _permit = self.semaphore.acquire().await.map_err(|_| {
-                // This only happens if semaphore is closed, which shouldn't happen
-                panic!("Bridge semaphore closed unexpectedly");
-            }).unwrap();
+            let _permit = self
+                .semaphore
+                .acquire()
+                .await
+                .map_err(|_| {
+                    // This only happens if semaphore is closed, which shouldn't happen
+                    panic!("Bridge semaphore closed unexpectedly");
+                })
+                .unwrap();
 
             match f().await {
                 Ok(val) => return Ok(val),
                 Err(e) if attempts < 5 => {
                     attempts += 1;
                     let delay = attempts * attempts * 100; // 100, 400, 900, 1600, 2500ms
-                    println!("Transient Hue error (attempt {}): {}. Retrying in {}ms", attempts, e, delay);
+                    println!(
+                        "Transient Hue error (attempt {}): {}. Retrying in {}ms",
+                        attempts, e, delay
+                    );
                     tokio::time::sleep(std::time::Duration::from_millis(delay as u64)).await;
                 }
                 Err(e) => {
-                    println!("Persistent Hue error after {} attempts: {}", attempts + 1, e);
+                    println!(
+                        "Persistent Hue error after {} attempts: {}",
+                        attempts + 1,
+                        e
+                    );
                     return Err(e);
                 }
             }
@@ -193,14 +308,16 @@ impl ClientEx {
 
     /// Fetch all sensors and group them by device into CompositeSensors
     pub async fn get_sensors(&self) -> Result<Vec<CompositeSensor>, Error<ErrorResponse>> {
-        let (motion_res, temp_res, light_res, devices_res) = self.retry(|| async {
-            tokio::try_join!(
-                self.inner.get_motion_sensors(),
-                self.inner.get_temperatures(),
-                self.inner.get_light_levels(),
-                self.inner.get_devices()
-            )
-        }).await?;
+        let (motion_res, temp_res, light_res, devices_res) = self
+            .retry(|| async {
+                tokio::try_join!(
+                    self.inner.get_motion_sensors(),
+                    self.inner.get_temperatures(),
+                    self.inner.get_light_levels(),
+                    self.inner.get_devices()
+                )
+            })
+            .await?;
 
         let motion_response = motion_res;
         let temp_response = temp_res;
@@ -214,12 +331,15 @@ impl ClientEx {
             if let (Some(id), Some(owner_rid)) = (&m.id, Self::get_owner_rid(&m.owner)) {
                 if let Some(cs) = device_map.get_mut(&owner_rid) {
                     if let Some(report) = m.motion.as_ref().and_then(|m| m.motion_report.as_ref()) {
+                        let presence = report.motion.unwrap_or(false);
+                        let last_updated = Self::parse_date(&report.changed);
                         cs.motion = Some(MotionData {
                             id: id.to_string(),
                             id_v1: m.id_v1.as_ref().map(|v| v.to_string()),
                             enabled: m.enabled.unwrap_or(true),
-                            presence: report.motion.unwrap_or(false),
-                            last_updated: Self::parse_date(&report.changed),
+                            presence,
+                            last_updated,
+                            history: vec![(last_updated, presence)],
                         });
                     }
                 }
@@ -235,12 +355,15 @@ impl ClientEx {
                         .as_ref()
                         .and_then(|t| t.temperature_report.as_ref())
                     {
+                        let temperature = report.temperature.unwrap_or(0.0);
+                        let last_updated = report.changed.unwrap_or_else(Utc::now);
                         cs.temperature = Some(TemperatureData {
                             id: id.to_string(),
                             id_v1: t.id_v1.as_ref().map(|v| v.to_string()),
                             enabled: t.enabled.unwrap_or(true),
-                            temperature: report.temperature.unwrap_or(0.0),
-                            last_updated: report.changed.unwrap_or_else(Utc::now),
+                            temperature,
+                            last_updated,
+                            history: vec![(last_updated, temperature)],
                         });
                     }
                 }
@@ -251,14 +374,18 @@ impl ClientEx {
         for l in &light_response.data {
             if let (Some(id), Some(owner_rid)) = (&l.id, Self::get_owner_rid(&l.owner)) {
                 if let Some(cs) = device_map.get_mut(&owner_rid) {
-                    if let Some(report) = l.light.as_ref().and_then(|l| l.light_level_report.as_ref())
+                    if let Some(report) =
+                        l.light.as_ref().and_then(|l| l.light_level_report.as_ref())
                     {
+                        let light_level = report.light_level.map(|v| v as i32).unwrap_or(0);
+                        let last_updated = report.changed.unwrap_or_else(Utc::now);
                         cs.light = Some(LightData {
                             id: id.to_string(),
                             id_v1: l.id_v1.as_ref().map(|v| v.to_string()),
                             enabled: l.enabled.unwrap_or(true),
-                            light_level: report.light_level.map(|v| v as i32).unwrap_or(0),
-                            last_updated: report.changed.unwrap_or_else(Utc::now),
+                            light_level,
+                            last_updated,
+                            history: vec![(last_updated, light_level)],
                         });
                     }
                 }
@@ -287,15 +414,17 @@ impl ClientEx {
 
     /// Builds a map of resource IDs to device names
     pub async fn get_name_map(&self) -> Result<HashMap<String, String>, Error<ErrorResponse>> {
-        let (devices_res, rooms_res, zones_res, lights_res, bridge_homes_res) = self.retry(|| async {
-            tokio::try_join!(
-                self.inner.get_devices(),
-                self.inner.get_rooms(),
-                self.inner.get_zones(),
-                self.inner.get_lights(),
-                self.inner.get_bridge_homes(),
-            )
-        }).await?;
+        let (devices_res, rooms_res, zones_res, lights_res, bridge_homes_res) = self
+            .retry(|| async {
+                tokio::try_join!(
+                    self.inner.get_devices(),
+                    self.inner.get_rooms(),
+                    self.inner.get_zones(),
+                    self.inner.get_lights(),
+                    self.inner.get_bridge_homes(),
+                )
+            })
+            .await?;
 
         let mut name_map = HashMap::new();
 
@@ -303,7 +432,11 @@ impl ClientEx {
             Self::insert_resource_names(
                 &mut name_map,
                 device.id.as_ref().map(|id| id.to_string()),
-                device.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                device
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.name.as_ref())
+                    .map(|n| n.to_string()),
                 &device.services,
             );
         }
@@ -312,7 +445,10 @@ impl ClientEx {
             Self::insert_resource_names(
                 &mut name_map,
                 room.id.as_ref().map(|id| id.to_string()),
-                room.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                room.metadata
+                    .as_ref()
+                    .and_then(|m| m.name.as_ref())
+                    .map(|n| n.to_string()),
                 &room.services,
             );
         }
@@ -321,7 +457,10 @@ impl ClientEx {
             Self::insert_resource_names(
                 &mut name_map,
                 zone.id.as_ref().map(|id| id.to_string()),
-                zone.metadata.as_ref().and_then(|m| m.name.as_ref()).map(|n| n.to_string()),
+                zone.metadata
+                    .as_ref()
+                    .and_then(|m| m.name.as_ref())
+                    .map(|n| n.to_string()),
                 &zone.services,
             );
         }
@@ -347,7 +486,9 @@ impl ClientEx {
     }
 
     /// Returns a stream of Hue events as JSON strings
-    pub async fn event_stream(&self) -> Result<impl futures::Stream<Item = String>, reqwest::Error> {
+    pub async fn event_stream(
+        &self,
+    ) -> Result<impl futures::Stream<Item = String>, reqwest::Error> {
         use futures::StreamExt;
         use tokio_util::codec::{FramedRead, LinesCodec};
 

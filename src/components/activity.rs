@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use chrono::{DateTime, Utc};
+use dioxus::prelude::*;
 
 #[component]
 pub fn ActivityIndicator(last_update: ReadSignal<DateTime<Utc>>) -> Element {
@@ -19,7 +19,7 @@ pub fn ActivityIndicator(last_update: ReadSignal<DateTime<Utc>>) -> Element {
     let elapsed = (now() - last_update()).num_seconds();
     let max_freshness = 300; // 5 minutes
     let freshness = (1.0 - (elapsed as f64 / max_freshness as f64)).clamp(0.0, 1.0);
-    
+
     // Calculate color based on freshness
     let color = if freshness > 0.5 {
         "text-green-500"

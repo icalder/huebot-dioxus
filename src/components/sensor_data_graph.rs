@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
-use chrono::{DateTime, Utc, Duration};
 use crate::components::HistoryPoint;
+use chrono::{DateTime, Duration, Utc};
+use dioxus::prelude::*;
 
 #[component]
 pub fn SensorDataGraph(
@@ -21,7 +21,7 @@ pub fn SensorDataGraph(
 
     let end_time = Utc::now();
     let start_time = end_time - Duration::hours(24);
-    
+
     // Normalize X (time) over 24 hours
     let x_scale = move |t: DateTime<Utc>| {
         let elapsed = (t - start_time).num_seconds() as f64;
@@ -36,8 +36,12 @@ pub fn SensorDataGraph(
         let mut min = history[0].value;
         let mut max = history[0].value;
         for p in history.iter() {
-            if p.value < min { min = p.value; }
-            if p.value > max { max = p.value; }
+            if p.value < min {
+                min = p.value;
+            }
+            if p.value > max {
+                max = p.value;
+            }
         }
         if (max - min).abs() < 0.1 {
             (min - 1.0, max + 1.0)
@@ -80,11 +84,11 @@ pub fn SensorDataGraph(
         let x = x_scale(p.time);
         let y = y_scale(p.value);
         graph_points.push((x, y, p.value));
-        
+
         if i == 0 {
             path_data.push_str(&format!("M {} {}", x, y));
         } else if is_discrete {
-            let prev_y = y_scale(display_history[i-1].value);
+            let prev_y = y_scale(display_history[i - 1].value);
             path_data.push_str(&format!(" L {} {}", x, prev_y));
             path_data.push_str(&format!(" L {} {}", x, y));
         } else {
@@ -98,19 +102,19 @@ pub fn SensorDataGraph(
         let last_idx = display_history.len() - 1;
         for (i, p) in display_history.iter().enumerate() {
             let current_x = x_scale(p.time);
-            
+
             let start_x = if i == 0 {
                 0.0
             } else {
-                (x_scale(display_history[i-1].time) + current_x) / 2.0
+                (x_scale(display_history[i - 1].time) + current_x) / 2.0
             };
-            
+
             let end_x = if i == last_idx {
                 width as f64
             } else {
-                (current_x + x_scale(display_history[i+1].time)) / 2.0
+                (current_x + x_scale(display_history[i + 1].time)) / 2.0
             };
-            
+
             regions.push((start_x, end_x, p.clone()));
         }
         regions
@@ -119,20 +123,28 @@ pub fn SensorDataGraph(
     };
 
     // Generate hour labels with percentages for HTML positioning
-    let label_items = (0..=24).filter(|h| h % 3 == 0).map(|h| {
-        let time = start_time + Duration::hours(h as i64);
-        let pct = (h as f64 / 24.0) * 100.0;
-        let label = time.with_timezone(&chrono::Local).format("%H:%M").to_string();
-        (pct, label)
-    }).collect::<Vec<_>>();
+    let label_items = (0..=24)
+        .filter(|h| h % 3 == 0)
+        .map(|h| {
+            let time = start_time + Duration::hours(h as i64);
+            let pct = (h as f64 / 24.0) * 100.0;
+            let label = time
+                .with_timezone(&chrono::Local)
+                .format("%H:%M")
+                .to_string();
+            (pct, label)
+        })
+        .collect::<Vec<_>>();
 
     // Generate Y labels for non-discrete data
     let y_labels = if !is_discrete {
-        (0..=4).map(|i| {
-            let pct = (i as f64 / 4.0) * 100.0;
-            let val = max_v - (i as f64 / 4.0) * (max_v - min_v);
-            (pct, val)
-        }).collect::<Vec<_>>()
+        (0..=4)
+            .map(|i| {
+                let pct = (i as f64 / 4.0) * 100.0;
+                let val = max_v - (i as f64 / 4.0) * (max_v - min_v);
+                (pct, val)
+            })
+            .collect::<Vec<_>>()
     } else {
         Vec::new()
     };
@@ -146,15 +158,15 @@ pub fn SensorDataGraph(
                 preserve_aspect_ratio: "none",
                 class: "overflow-visible",
                 onmouseleave: move |_| hovered_point.set(None),
-                
+
                 // Grid lines (horizontal)
                 if !is_discrete {
                     for i in 0..=4 {
                         {
                             let y = (height as f64 / 4.0) * i as f64;
                             rsx! {
-                                line { 
-                                    x1: "0", y1: "{y}", x2: "{width}", y2: "{y}", 
+                                line {
+                                    x1: "0", y1: "{y}", x2: "{width}", y2: "{y}",
                                     stroke: "currentColor", stroke_width: "0.5", class: "text-gray-200 dark:text-gray-700",
                                     vector_effect: "non-scaling-stroke"
                                 }
@@ -167,8 +179,8 @@ pub fn SensorDataGraph(
                         {
                             let y = y_scale(i);
                             rsx! {
-                                line { 
-                                    x1: "0", y1: "{y}", x2: "{width}", y2: "{y}", 
+                                line {
+                                    x1: "0", y1: "{y}", x2: "{width}", y2: "{y}",
                                     stroke: "currentColor", stroke_width: "0.5", class: "text-gray-200 dark:text-gray-700",
                                     vector_effect: "non-scaling-stroke"
                                 }
@@ -195,10 +207,10 @@ pub fn SensorDataGraph(
                                 let radius = if val > 0.5 { 5 } else { 3 };
                                 let opacity = if val > 0.5 { 1.0 } else { 0.3 };
                                 rsx! {
-                                    circle { 
-                                        cx: "{x}", 
-                                        cy: "{y}", 
-                                        r: "{radius}", 
+                                    circle {
+                                        cx: "{x}",
+                                        cy: "{y}",
+                                        r: "{radius}",
                                         fill: "{color}",
                                         fill_opacity: "{opacity}"
                                     }
@@ -213,15 +225,15 @@ pub fn SensorDataGraph(
                     {
                         let x = (*pct / 100.0) * width as f64;
                         rsx! {
-                            line { 
-                                x1: "{x}", y1: "{height}", x2: "{x}", y2: "{height + 5}", 
+                            line {
+                                x1: "{x}", y1: "{height}", x2: "{x}", y2: "{height + 5}",
                                 stroke: "currentColor", stroke_width: "1.5", class: "text-gray-300 dark:text-gray-200",
                                 vector_effect: "non-scaling-stroke"
                             }
                         }
                     }
                 }
-                
+
                 // Hit Targets (Transparent)
                 g {
                     for (start_x, end_x, p) in hit_regions {
@@ -236,7 +248,7 @@ pub fn SensorDataGraph(
                         }
                     }
                 }
-                
+
                 // Hover Indicator
                 if let Some(p) = hovered_point() {
                     {
@@ -267,7 +279,7 @@ pub fn SensorDataGraph(
             // HTML Labels (prevents font stretching)
             div { class: "absolute bottom-0 left-2 right-12 h-6 pointer-events-none",
                 for (pct, label) in label_items {
-                    span { 
+                    span {
                         class: "absolute text-xs font-bold text-gray-400 dark:text-white whitespace-nowrap",
                         style: "left: {pct}%; transform: translateX(-50%);",
                         "{label}"
@@ -279,7 +291,7 @@ pub fn SensorDataGraph(
             if !is_discrete {
                 div { class: "absolute top-2 bottom-8 right-0 w-12 pointer-events-none",
                     for (pct, val) in y_labels {
-                        span { 
+                        span {
                             class: "absolute right-2 text-[10px] font-bold text-gray-400 dark:text-white whitespace-nowrap",
                             style: "top: {pct}%; transform: translateY(-50%);",
                             if val >= 1000.0 {
@@ -293,7 +305,7 @@ pub fn SensorDataGraph(
                     }
                 }
             }
-            
+
             // Tooltip Popup
             if let Some(p) = hovered_point() {
                 {
@@ -305,7 +317,7 @@ pub fn SensorDataGraph(
                     } else {
                          format!("{:.1}{}", p.value, unit)
                     };
-                    
+
                     let is_top = y_pct < 20.0;
                     let is_right = x_pct > 80.0;
                     let transform_style = format!(
@@ -313,12 +325,12 @@ pub fn SensorDataGraph(
                         if is_right { "-100%" } else { "-50%" },
                         if is_top { "10px" } else { "-120%" }
                     );
-                    
+
                     rsx! {
                         div {
                             class: "absolute z-10 pointer-events-none bg-white dark:bg-gray-800 rounded shadow-lg p-2 border border-gray-200 dark:border-gray-700 text-xs",
                             style: "left: {x_pct}%; top: {y_pct}%; transform: {transform_style};",
-                            
+
                             div { class: "font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap", "{time_str}" }
                             div { class: "text-gray-600 dark:text-gray-400 whitespace-nowrap", "{val_str}" }
                         }

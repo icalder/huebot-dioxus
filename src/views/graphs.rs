@@ -1,7 +1,7 @@
-use dioxus::prelude::*; 
+use crate::components::{HistoryPoint, SensorDataGraph};
+use chrono::{DateTime, Duration, Utc};
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc, Duration};
-use crate::components::{SensorDataGraph, HistoryPoint};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphPoint<T> {
@@ -22,7 +22,9 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
     let pool = crate::hue::get_db_pool().await?;
 
     let sensors = crate::hue::get_sensors_cached().await?;
-    let sensor = sensors.iter().find(|s| s.device_id == sensor_id)
+    let sensor = sensors
+        .iter()
+        .find(|s| s.device_id == sensor_id)
         .ok_or_else(|| ServerFnError::new("Sensor not found"))?;
 
     let end = Utc::now();
@@ -33,20 +35,21 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
     let mut light_levels = Vec::new();
 
     let extract_id = |id_v1: &Option<String>| {
-        id_v1.as_ref()
+        id_v1
+            .as_ref()
             .and_then(|s| s.split('/').last())
             .and_then(|s| s.parse::<i32>().ok())
     };
 
     if let Some(m) = &sensor.motion {
         if let Some(v1_id) = extract_id(&m.id_v1) {
-            let rows = sqlx::query(
-                "select creationtime, motion from sensor_motion($1, $2, $3)"
-            )
-            .bind(v1_id)
-            .bind(start)
-            .bind(end)
-            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows = sqlx::query("select creationtime, motion from sensor_motion($1, $2, $3)")
+                .bind(v1_id)
+                .bind(start)
+                .bind(end)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
                 use sqlx::Row;
@@ -64,13 +67,14 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
 
     if let Some(t) = &sensor.temperature {
         if let Some(v1_id) = extract_id(&t.id_v1) {
-            let rows = sqlx::query(
-                "select creationtime, temperature from sensor_temperature($1, $2, $3)"
-            )
-            .bind(v1_id)
-            .bind(start)
-            .bind(end)
-            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows =
+                sqlx::query("select creationtime, temperature from sensor_temperature($1, $2, $3)")
+                    .bind(v1_id)
+                    .bind(start)
+                    .bind(end)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
                 use sqlx::Row;
@@ -88,13 +92,14 @@ pub async fn get_graph_data(sensor_id: String) -> Result<SensorGraphData, Server
 
     if let Some(l) = &sensor.light {
         if let Some(v1_id) = extract_id(&l.id_v1) {
-            let rows = sqlx::query(
-                "select creationtime, light_level from sensor_light_level($1, $2, $3)"
-            )
-            .bind(v1_id)
-            .bind(start)
-            .bind(end)
-            .fetch_all(&pool).await.map_err(|e| ServerFnError::new(e.to_string()))?;
+            let rows =
+                sqlx::query("select creationtime, light_level from sensor_light_level($1, $2, $3)")
+                    .bind(v1_id)
+                    .bind(start)
+                    .bind(end)
+                    .fetch_all(&pool)
+                    .await
+                    .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             for row in rows {
                 use sqlx::Row;
@@ -123,20 +128,32 @@ pub fn Graphs(sensor_id: String) -> Element {
     let data = use_loader(move || get_graph_data(sensor_id.clone()))?;
     let data = data.read();
 
-    let motion_history = data.motions.iter().map(|p| HistoryPoint {
-        value: if p.value { 1.0 } else { 0.0 },
-        time: p.timestamp,
-    }).collect::<Vec<_>>();
+    let motion_history = data
+        .motions
+        .iter()
+        .map(|p| HistoryPoint {
+            value: if p.value { 1.0 } else { 0.0 },
+            time: p.timestamp,
+        })
+        .collect::<Vec<_>>();
 
-    let temp_history = data.temperatures.iter().map(|p| HistoryPoint {
-        value: p.value as f64,
-        time: p.timestamp,
-    }).collect::<Vec<_>>();
+    let temp_history = data
+        .temperatures
+        .iter()
+        .map(|p| HistoryPoint {
+            value: p.value as f64,
+            time: p.timestamp,
+        })
+        .collect::<Vec<_>>();
 
-    let light_history = data.light_levels.iter().map(|p| HistoryPoint {
-        value: p.value as f64,
-        time: p.timestamp,
-    }).collect::<Vec<_>>();
+    let light_history = data
+        .light_levels
+        .iter()
+        .map(|p| HistoryPoint {
+            value: p.value as f64,
+            time: p.timestamp,
+        })
+        .collect::<Vec<_>>();
 
     rsx! {
         div {
@@ -155,10 +172,10 @@ pub fn Graphs(sensor_id: String) -> Element {
                     div {
                         class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
                         h2 { class: "text-lg font-semibold mb-2", "Motion" }
-                        div { class: "h-64 w-full", 
-                            SensorDataGraph { 
-                                history: motion_history, 
-                                is_discrete: true, 
+                        div { class: "h-64 w-full",
+                            SensorDataGraph {
+                                history: motion_history,
+                                is_discrete: true,
                                 color: "#f87171" // red-400
                             }
                         }
@@ -166,9 +183,9 @@ pub fn Graphs(sensor_id: String) -> Element {
                                     div {
                                         class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
                                         h2 { class: "text-lg font-semibold mb-2", "Temperature" }
-                                        div { class: "h-64 w-full", 
-                                            SensorDataGraph { 
-                                                history: temp_history, 
+                                        div { class: "h-64 w-full",
+                                            SensorDataGraph {
+                                                history: temp_history,
                                                 unit: "°C".to_string(),
                                                 color: "#60a5fa" // blue-400
                                             }
@@ -177,9 +194,9 @@ pub fn Graphs(sensor_id: String) -> Element {
                                     div {
                                         class: "p-4 bg-white dark:bg-gray-800 rounded-lg shadow w-full",
                                         h2 { class: "text-lg font-semibold mb-2", "Light Level" }
-                                        div { class: "h-64 w-full", 
-                                            SensorDataGraph { 
-                                                history: light_history, 
+                                        div { class: "h-64 w-full",
+                                            SensorDataGraph {
+                                                history: light_history,
                                                 unit: "lx".to_string(),
                                                 color: "#fbbf24" // amber-400
                                             }
