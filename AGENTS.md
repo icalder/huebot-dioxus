@@ -312,6 +312,79 @@ A `retry` helper in `src/hue/client.rs` handles transient bridge errors with:
 - Detailed logging of transient and persistent errors.
 
 ## Metadata Caching
+
 To avoid redundant bridge load, sensor metadata is cached in `src/hue/mod.rs` via `SENSORS_CACHE`:
+
 - **5-minute TTL**: Cache expires after 5 minutes.
+
 - **`get_sensors_cached()`**: Use this helper instead of direct bridge calls when up-to-the-second precision isn't required (e.g., loading graph metadata).
+
+
+
+# Event Handling & Parsing Patterns
+
+
+
+When consuming external APIs (like Hue's EventStream) where some events are strictly typed and others must be passed through:
+
+
+
+## 1. Avoid `#[serde(untagged)]` for Mixed Data
+
+Untagged enums can lead to silent failures or ambiguous matching when payloads share fields. It is brittle when mixing strict types with a catch-all.
+
+
+
+## 2. Avoid `#[serde(other)]` for Data Capture
+
+`#[serde(other)]` only works on **unit variants**. If used, the payload of the unknown event is discarded. Do not use it if you need to log or process the unknown data.
+
+
+
+## 3. Recommended Pattern: Manual Dispatch + Raw Fallback
+
+For robust handling of partial schemas:
+
+1. Define a `Raw(serde_json::Value)` variant in your enum.
+
+2. Implement a `from_json` method that manually inspects the discriminator field (e.g., `type`).
+
+3. Match known types to specific struct variants.
+
+4. Fallback to `Raw(v)` for anything else.
+
+
+
+```rust
+
+impl HueEvent {
+
+    pub fn from_json(v: &serde_json::Value) -> Option<Self> {
+
+        let t = v.get("type").and_then(|t| t.as_str());
+
+        match t {
+
+            Some("motion") => { /* construct Motion variant */ },
+
+            _ => Some(Self::Raw(v.clone())), // Capture everything else
+
+        }
+
+    }
+
+}
+
+```
+
+
+
+## 4. Helper Accessors
+
+Ensure helper methods (like `id()` or `owner()`) handle the `Raw` variant by dynamically extracting data from the JSON `Value`. This allows UI components to display metadata even for unmodeled events.
+
+
+
+## 5. Transparent Streaming
+
+When acting as a proxy (Server -> Client), prefer streaming the raw JSON `String` rather than re-serializing the Rust Enum. This guarantees data fidelity and prevents serialization artifacts from breaking the client parser.

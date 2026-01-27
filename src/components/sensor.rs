@@ -8,7 +8,17 @@ use std::cmp::Ordering;
 #[component]
 pub fn Sensor(sensor: CompositeSensor) -> Element {
     let mut is_glowing = use_signal(|| false);
-    let mut dummy_trigger = use_signal(|| 0);
+    
+    // Calculate the latest update time from the sensor data for initial render stability
+    let initial_time = {
+        let mut t = Utc::now() - chrono::Duration::days(1); // Default to old if no data
+        if let Some(m) = &sensor.motion { if m.last_updated > t { t = m.last_updated; } }
+        if let Some(temp) = &sensor.temperature { if temp.last_updated > t { t = temp.last_updated; } }
+        if let Some(l) = &sensor.light { if l.last_updated > t { t = l.last_updated; } }
+        t
+    };
+    
+    let mut graph_time = use_signal(|| initial_time);
 
     // Store previous values to calculate trends
     let mut last_temp = use_signal(|| None::<f64>);
@@ -55,17 +65,22 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
     // Periodic refresh to keep sparklines scrolling
     use_future(move || async move {
         loop {
+            // Update the graph time to "now" to create the live scrolling effect
+            // We do this *before* sleep on the first run (implicitly) or quickly after hydration
+            // Actually, for hydration matching, we want the first render to use initial_time.
+            // So we sleep first.
+            
             #[cfg(feature = "server")]
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             #[cfg(not(feature = "server"))]
-            gloo_timers::future::sleep(std::time::Duration::from_secs(30)).await;
+            gloo_timers::future::sleep(std::time::Duration::from_secs(1)).await;
 
-            // Re-render by incrementing dummy trigger
-            *dummy_trigger.write() += 1;
+            graph_time.set(Utc::now());
         }
     });
 
     let sensor_ref = sensor;
+    let current_time = graph_time();
 
     // Memos replaced with direct calculation
     let motion_history = {
@@ -84,7 +99,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
             .collect();
         if let Some(last) = points.last() {
             points.push(HistoryPoint {
-                time: Utc::now(),
+                time: current_time,
                 value: last.value,
             });
         }
@@ -103,7 +118,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
             .collect();
         if let Some(last) = points.last() {
             points.push(HistoryPoint {
-                time: Utc::now(),
+                time: current_time,
                 value: last.value,
             });
         }
@@ -125,7 +140,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
             .collect();
         if let Some(last) = points.last() {
             points.push(HistoryPoint {
-                time: Utc::now(),
+                time: current_time,
                 value: last.value,
             });
         }
@@ -227,7 +242,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
                                             span { class: "{motion_class}", "{status}" }
                                             span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                         }
-                                        Sparkline { history: motion_history, is_discrete: true, color: "#f87171" }
+                                        Sparkline { history: motion_history, is_discrete: true, color: "#f87171", reference_time: current_time }
                                     }
                                 }
                             }
@@ -259,7 +274,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
                                             }
                                             span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                         }
-                                        Sparkline { history: temp_history, color: "#60a5fa" }
+                                        Sparkline { history: temp_history, color: "#60a5fa", reference_time: current_time }
                                     }
                                 }
                             }
@@ -291,7 +306,7 @@ pub fn Sensor(sensor: CompositeSensor) -> Element {
                                             }
                                             span { class: "text-xs text-gray-500 dark:text-gray-500 ml-2", "@{time}" }
                                         }
-                                        Sparkline { history: light_history, color: "#fbbf24" }
+                                        Sparkline { history: light_history, color: "#fbbf24", reference_time: current_time }
                                     }
                                 }
                             }

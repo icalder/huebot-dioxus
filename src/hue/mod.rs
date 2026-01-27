@@ -9,6 +9,8 @@ use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 
 pub mod client;
+pub mod events;
+pub mod models;
 #[cfg(feature = "server")]
 pub mod eventcache;
 #[cfg(feature = "server")]
@@ -79,24 +81,21 @@ pub async fn get_sensors_cached() -> Result<Vec<client::CompositeSensor>, Server
 
     // Backfill history from EventCache
     let events = EVENT_CACHE.get_all();
-    if !events.is_empty() {
-        for event_str in events {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
-                let owner_rid = v
-                    .get("owner")
-                    .and_then(|o| o.get("rid"))
-                    .and_then(|rid| rid.as_str());
-                let resource_id = v.get("id").and_then(|id| id.as_str());
+    for event_str in events {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
+            if let Some(event) = client::HueEvent::from_json(&v) {
+                let owner_rid = event.owner_rid();
+                let resource_id = event.resource_id();
 
                 for s in sensors.iter_mut() {
-                    let is_owner = owner_rid == Some(&s.device_id);
+                    let is_owner = owner_rid == Some(s.device_id.as_str());
                     let matches_resource = resource_id.is_some()
                         && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
                             || s.temperature.as_ref().map(|t| t.id.as_str()) == resource_id
                             || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
 
                     if is_owner || matches_resource {
-                        s.update_from_json(&v);
+                        s.apply_event(&event);
                     }
                 }
             }
@@ -150,7 +149,31 @@ fn start_event_listener() {
                             futures::pin_mut!(stream);
                             while let Some(msg) = stream.next().await {
                                 EVENT_CACHE.add(msg.clone());
-                                // Ignore SendError (happens if no subscribers)
+                                
+                                // Update sensor cache
+                                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&msg) {
+                                    if let Some(event) = client::HueEvent::from_json(&v) {
+                                        let mut cache = SENSORS_CACHE.write().await;
+                                        if let Some((ref mut sensors, _)) = *cache {
+                                            let owner_rid = event.owner_rid();
+                                            let resource_id = event.resource_id();
+
+                                            for s in sensors.iter_mut() {
+                                                let is_owner = owner_rid == Some(s.device_id.as_str());
+                                                let matches_resource = resource_id.is_some()
+                                                    && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
+                                                        || s.temperature.as_ref().map(|t| t.id.as_str()) == resource_id
+                                                        || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
+
+                                                if is_owner || matches_resource {
+                                                    s.apply_event(&event);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Broadcast raw message
                                 let _ = tx.send(msg);
                             }
                             println!("Hue Bridge event stream ended.");
@@ -201,7 +224,7 @@ pub async fn hue_events(cached: bool) -> Result<dioxus::fullstack::TextStream, S
 
 pub fn use_hue_event_handler(
     cached: bool,
-    on_event: impl FnMut(String) + 'static,
+    on_event: impl FnMut(client::HueEvent) + 'static,
     on_error: impl FnMut(String) + 'static,
 ) {
     use std::cell::RefCell;
@@ -262,8 +285,12 @@ pub fn use_hue_event_handler(
                     match hue_events(cached).await {
                         Ok(mut stream) => {
                             while let Some(Ok(event_str)) = stream.next().await {
-                                if let Some(ref mut handler) = *on_event.borrow_mut() {
-                                    handler(event_str);
+                                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
+                                    if let Some(event) = client::HueEvent::from_json(&v) {
+                                        if let Some(ref mut handler) = *on_event.borrow_mut() {
+                                            handler(event);
+                                        }
+                                    }
                                 }
                             }
                         }
