@@ -128,11 +128,10 @@ pub fn SensorDataGraph(
         .map(|h| {
             let time = start_time + Duration::hours(h as i64);
             let pct = (h as f64 / 24.0) * 100.0;
-            let label = time
-                .with_timezone(&chrono::Local)
-                .format("%H:%M")
-                .to_string();
-            (pct, label)
+            let local_time = time.with_timezone(&chrono::Local);
+            let hours = local_time.format("%H").to_string();
+            let minutes = local_time.format(":%M").to_string();
+            (pct, hours, minutes)
         })
         .collect::<Vec<_>>();
 
@@ -221,7 +220,7 @@ pub fn SensorDataGraph(
                 }
 
                 // X-Axis ticks (keep in SVG for alignment)
-                for (pct, _label) in &label_items {
+                for (pct, _, _) in &label_items {
                     {
                         let x = (*pct / 100.0) * width as f64;
                         rsx! {
@@ -278,11 +277,12 @@ pub fn SensorDataGraph(
 
             // HTML Labels (prevents font stretching)
             div { class: "absolute bottom-0 left-2 right-12 h-6 pointer-events-none",
-                for (pct, label) in label_items {
+                for (pct, hours, minutes) in label_items {
                     span {
                         class: "absolute text-xs font-bold text-gray-400 dark:text-white whitespace-nowrap",
                         style: "left: {pct}%; transform: translateX(-50%);",
-                        "{label}"
+                        span { "{hours}" }
+                        span { class: "hidden sm:inline", "{minutes}" }
                     }
                 }
             }
