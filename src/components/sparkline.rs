@@ -14,6 +14,7 @@ pub fn Sparkline(
     #[props(default = 24)] height: u32,
     #[props(default = false)] is_discrete: bool,
     color: String,
+    reference_time: DateTime<Utc>,
 ) -> Element {
     let points = history;
     if points.len() < 2 {
@@ -24,7 +25,7 @@ pub fn Sparkline(
         };
     }
 
-    let now = Utc::now();
+    let now = reference_time;
     let ten_mins_ago = now - Duration::minutes(10);
 
     // Normalize X (time)

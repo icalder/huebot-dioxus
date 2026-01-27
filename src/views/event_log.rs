@@ -20,15 +20,8 @@ pub fn EventLog() -> Element {
     crate::hue::use_hue_event_handler(
         false,
         move |event| {
-            let v: serde_json::Value =
-                serde_json::from_str(&event).unwrap_or(serde_json::Value::Null);
-
-            // Try to extract the resource ID or the owner ID
-            let id = v.get("id").and_then(|id| id.as_str());
-            let owner_rid = v
-                .get("owner")
-                .and_then(|o| o.get("rid"))
-                .and_then(|rid| rid.as_str());
+            let id = event.resource_id();
+            let owner_rid = event.owner_rid();
 
             let device_name = {
                 let names_ready = names.read();
@@ -43,6 +36,8 @@ pub fn EventLog() -> Element {
                         } else {
                             None
                         }
+                    } else if let Some(owner_rid) = owner_rid {
+                        map.get(owner_rid).cloned()
                     } else {
                         None
                     }
@@ -59,8 +54,13 @@ pub fn EventLog() -> Element {
                 }
             });
 
+            let event_str = match &event {
+                crate::hue::events::HueEvent::Raw(v) => serde_json::to_string(v).unwrap_or_default(),
+                _ => serde_json::to_string(&event).unwrap_or_default(),
+            };
+
             events.with_mut(|evs: &mut Vec<(String, String)>| {
-                evs.push((display_name, event));
+                evs.push((display_name, event_str));
                 if evs.len() > 20 {
                     evs.remove(0);
                 }

@@ -17,35 +17,28 @@ pub fn Sensors() -> Element {
 
     crate::hue::use_hue_event_handler(
         false,
-        move |event_str| {
-            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
-                let owner_rid = v
-                    .get("owner")
-                    .and_then(|o| o.get("rid"))
-                    .and_then(|rid| rid.as_str());
-                let resource_id = v.get("id").and_then(|id| id.as_str());
+        move |event| {
+            let owner_rid = event.owner_rid();
+            let resource_id = event.resource_id();
 
-                let mut updated = false;
-                sensors.with_mut(|list: &mut Vec<CompositeSensor>| {
-                    for s in list.iter_mut() {
-                        // Update if the event belongs to this device (via owner)
-                        // or matches a known resource ID already attached to this sensor
-                        let is_owner = owner_rid == Some(&s.device_id);
-                        let matches_resource = resource_id.is_some()
-                            && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
-                                || s.temperature.as_ref().map(|t| t.id.as_str()) == resource_id
-                                || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
+            let mut updated = false;
+            sensors.with_mut(|list: &mut Vec<CompositeSensor>| {
+                for s in list.iter_mut() {
+                    let is_owner = owner_rid == Some(s.device_id.as_str());
+                    let matches_resource = resource_id.is_some()
+                        && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
+                            || s.temperature.as_ref().map(|t| t.id.as_str()) == resource_id
+                            || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
 
-                        if is_owner || matches_resource {
-                            s.update_from_json(&v);
-                            updated = true;
-                        }
+                    if is_owner || matches_resource {
+                        s.apply_event(&event);
+                        updated = true;
                     }
-                });
-
-                if updated {
-                    last_global_update.set(Utc::now());
                 }
+            });
+
+            if updated {
+                last_global_update.set(Utc::now());
             }
         },
         move |msg| {
