@@ -148,7 +148,6 @@ fn start_event_listener() {
                             println!("Connected to Hue Bridge event stream.");
                             futures::pin_mut!(stream);
                             while let Some(msg) = stream.next().await {
-                                println!("Received Hue Bridge event: {}", msg);
                                 EVENT_CACHE.add(msg.clone());
 
                                 // Update sensor cache
@@ -292,7 +291,9 @@ pub fn use_hue_event_handler(
                     match hue_events(cached).await {
                         Ok(mut stream) => {
                             while let Some(Ok(event_str)) = stream.next().await {
-                                for v in serde_json::Deserializer::from_str(&event_str).into_iter::<serde_json::Value>() {
+                                for v in serde_json::Deserializer::from_str(&event_str)
+                                    .into_iter::<serde_json::Value>()
+                                {
                                     if let Ok(v) = v {
                                         if let Some(event) = client::HueEvent::from_json(&v) {
                                             if let Some(ref mut handler) = *on_event.borrow_mut() {
