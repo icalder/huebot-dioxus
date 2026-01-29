@@ -9,10 +9,10 @@ use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 
 pub mod client;
-pub mod events;
-pub mod models;
 #[cfg(feature = "server")]
 pub mod eventcache;
+pub mod events;
+pub mod models;
 #[cfg(feature = "server")]
 pub mod tests;
 
@@ -148,8 +148,9 @@ fn start_event_listener() {
                             println!("Connected to Hue Bridge event stream.");
                             futures::pin_mut!(stream);
                             while let Some(msg) = stream.next().await {
+                                println!("Received Hue Bridge event: {}", msg);
                                 EVENT_CACHE.add(msg.clone());
-                                
+
                                 // Update sensor cache
                                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&msg) {
                                     if let Some(event) = client::HueEvent::from_json(&v) {
@@ -159,11 +160,17 @@ fn start_event_listener() {
                                             let resource_id = event.resource_id();
 
                                             for s in sensors.iter_mut() {
-                                                let is_owner = owner_rid == Some(s.device_id.as_str());
+                                                let is_owner =
+                                                    owner_rid == Some(s.device_id.as_str());
                                                 let matches_resource = resource_id.is_some()
-                                                    && (s.motion.as_ref().map(|m| m.id.as_str()) == resource_id
-                                                        || s.temperature.as_ref().map(|t| t.id.as_str()) == resource_id
-                                                        || s.light.as_ref().map(|l| l.id.as_str()) == resource_id);
+                                                    && (s.motion.as_ref().map(|m| m.id.as_str())
+                                                        == resource_id
+                                                        || s.temperature
+                                                            .as_ref()
+                                                            .map(|t| t.id.as_str())
+                                                            == resource_id
+                                                        || s.light.as_ref().map(|l| l.id.as_str())
+                                                            == resource_id);
 
                                                 if is_owner || matches_resource {
                                                     s.apply_event(&event);
@@ -285,10 +292,12 @@ pub fn use_hue_event_handler(
                     match hue_events(cached).await {
                         Ok(mut stream) => {
                             while let Some(Ok(event_str)) = stream.next().await {
-                                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&event_str) {
-                                    if let Some(event) = client::HueEvent::from_json(&v) {
-                                        if let Some(ref mut handler) = *on_event.borrow_mut() {
-                                            handler(event);
+                                for v in serde_json::Deserializer::from_str(&event_str).into_iter::<serde_json::Value>() {
+                                    if let Ok(v) = v {
+                                        if let Some(event) = client::HueEvent::from_json(&v) {
+                                            if let Some(ref mut handler) = *on_event.borrow_mut() {
+                                                handler(event);
+                                            }
                                         }
                                     }
                                 }
