@@ -321,6 +321,35 @@ To avoid redundant bridge load, sensor metadata is cached in `src/hue/mod.rs` vi
 
 
 
+# Animations & VDOM Keys
+
+Dioxus efficiently updates existing DOM elements by default. However, **one-shot CSS animations** only trigger when an element is first created. If Dioxus simply updates an attribute or text node, the browser will not restart the animation.
+
+## Triggering One-Shot Animations
+
+To force an animation to replay when data updates, use the `key` attribute. When the `key` changes, Dioxus destroys the old element and mounts a brand-new one, causing the browser to trigger its CSS animation class from the start.
+
+```rust
+#[component]
+fn HighlightedValue(value: String, timestamp: String) -> Element {
+    rsx! {
+        div {
+            // Changing the key forces a remount, triggering 'animate-pulse-once'
+            key: "{timestamp}",
+            class: "animate-pulse-once",
+            "{value}"
+        }
+    }
+}
+```
+
+### Best Practices:
+1.  **Stable Keys:** Ensure the key only changes when you actually want the animation to fire (e.g., use a data fingerprint or a "last updated" timestamp). 
+2.  **Key Placement:** In Dioxus 0.7, keys should ideally be placed on the **first node** of a component's output or at the **component call site** to avoid VDOM warnings and ensure reliable remounting.
+3.  **Encapsulation:** Wrap the keyed element in a generic component (like `Pulsing {}`) to reuse the animation logic throughout the app.
+
+---
+
 # Event Handling & Parsing Patterns
 
 

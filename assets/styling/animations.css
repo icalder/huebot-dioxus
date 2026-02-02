@@ -1,0 +1,10 @@
+@keyframes pulse-once {
+  0% { filter: brightness(1); transform: scale(1); outline: 0px solid transparent; outline-offset: 0; }
+  25% { filter: brightness(1.4); transform: scale(1.03); outline: 4px solid #3b82f6; outline-offset: -4px; }
+  100% { filter: brightness(1); transform: scale(1); outline: 0px solid transparent; outline-offset: 0; }
+}
+
+.animate-pulse-once {
+  animation: pulse-once 1.0s ease-in-out forwards;
+  z-index: 10;
+}

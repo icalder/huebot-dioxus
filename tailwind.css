@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./assets/styling/navbar.css";
+@import "./assets/styling/animations.css";
 
 @source "./src/**/*.{rs,html,css}";
 

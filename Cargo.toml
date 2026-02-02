@@ -21,6 +21,8 @@ gloo-timers = { version = "0.3.0", features = ["futures"] }
 tokio-util = { version = "0.7.18", features = ["codec"] }
 web-sys = { version = "0.3", features = ["Window", "Document", "EventTarget", "Event"] }
 gloo-events = "0.2"
+tracing = "0.1"
+dioxus-logger = "0.7.1"
 
 [features]
 default = ["web", "server"]

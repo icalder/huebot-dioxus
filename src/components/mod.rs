@@ -15,3 +15,6 @@ pub use sensor_data_graph::SensorDataGraph;
 
 mod activity;
 pub use activity::ActivityIndicator;
+
+mod pulse;
+pub use pulse::Pulsing;

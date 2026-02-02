@@ -2598,6 +2598,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dioxus",
+ "dioxus-logger",
  "futures",
  "gloo-events",
  "gloo-timers",
@@ -2609,6 +2610,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tracing",
  "web-sys",
 ]
 

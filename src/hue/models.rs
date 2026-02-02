@@ -93,6 +93,15 @@ impl CompositeSensor {
             && self.light.as_ref().map(|l| l.enabled).unwrap_or(true);
     }
 
+    pub fn fingerprint(&self) -> String {
+        format!(
+            "{}-{}-{}",
+            self.motion.as_ref().map(|m| m.last_updated.to_rfc3339()).unwrap_or_default(),
+            self.temperature.as_ref().map(|t| t.last_updated.to_rfc3339()).unwrap_or_default(),
+            self.light.as_ref().map(|l| l.last_updated.to_rfc3339()).unwrap_or_default(),
+        )
+    }
+
     pub fn update_history<T: PartialEq + Clone + std::fmt::Display>(
         history: &mut Vec<(DateTime<Utc>, T)>,
         time: DateTime<Utc>,
