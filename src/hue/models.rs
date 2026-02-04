@@ -1,6 +1,7 @@
+use crate::hue::events::HueEvent;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::hue::events::HueEvent;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotionData {
@@ -10,7 +11,7 @@ pub struct MotionData {
     pub presence: bool,
     pub last_updated: DateTime<Utc>,
     #[serde(default)]
-    pub history: Vec<(DateTime<Utc>, bool)>,
+    pub history: Arc<Vec<(DateTime<Utc>, bool)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,7 +22,7 @@ pub struct TemperatureData {
     pub temperature: f64,
     pub last_updated: DateTime<Utc>,
     #[serde(default)]
-    pub history: Vec<(DateTime<Utc>, f64)>,
+    pub history: Arc<Vec<(DateTime<Utc>, f64)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -32,7 +33,7 @@ pub struct LightData {
     pub light_level: i32,
     pub last_updated: DateTime<Utc>,
     #[serde(default)]
-    pub history: Vec<(DateTime<Utc>, i32)>,
+    pub history: Arc<Vec<(DateTime<Utc>, i32)>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,41 +50,68 @@ pub struct CompositeSensor {
 impl CompositeSensor {
     pub fn apply_event(&mut self, event: &HueEvent) {
         match event {
-            HueEvent::Motion { id, presence, changed, enabled, .. } => {
-                let mut motion = MotionData {
+            HueEvent::Motion {
+                id,
+                presence,
+                changed,
+                enabled,
+                ..
+            } => {
+                let motion = self.motion.get_or_insert_with(|| MotionData {
                     id: id.clone(),
-                    id_v1: self.motion.as_ref().and_then(|m| m.id_v1.clone()),
+                    id_v1: None,
                     enabled: *enabled,
                     presence: *presence,
                     last_updated: *changed,
-                    history: self.motion.as_ref().map(|m| m.history.clone()).unwrap_or_default(),
-                };
-                Self::update_history(&mut motion.history, *changed, *presence);
-                self.motion = Some(motion);
+                    history: Arc::new(Vec::new()),
+                });
+
+                motion.enabled = *enabled;
+                motion.presence = *presence;
+                motion.last_updated = *changed;
+                Self::update_history(Arc::make_mut(&mut motion.history), *changed, *presence);
             }
-            HueEvent::Temperature { id, temperature, changed, enabled, .. } => {
-                let mut temp = TemperatureData {
+            HueEvent::Temperature {
+                id,
+                temperature,
+                changed,
+                enabled,
+                ..
+            } => {
+                let temp = self.temperature.get_or_insert_with(|| TemperatureData {
                     id: id.clone(),
-                    id_v1: self.temperature.as_ref().and_then(|t| t.id_v1.clone()),
+                    id_v1: None,
                     enabled: *enabled,
                     temperature: *temperature,
                     last_updated: *changed,
-                    history: self.temperature.as_ref().map(|t| t.history.clone()).unwrap_or_default(),
-                };
-                Self::update_history(&mut temp.history, *changed, *temperature);
-                self.temperature = Some(temp);
+                    history: Arc::new(Vec::new()),
+                });
+
+                temp.enabled = *enabled;
+                temp.temperature = *temperature;
+                temp.last_updated = *changed;
+                Self::update_history(Arc::make_mut(&mut temp.history), *changed, *temperature);
             }
-            HueEvent::LightLevel { id, light_level, changed, enabled, .. } => {
-                let mut light = LightData {
+            HueEvent::LightLevel {
+                id,
+                light_level,
+                changed,
+                enabled,
+                ..
+            } => {
+                let light = self.light.get_or_insert_with(|| LightData {
                     id: id.clone(),
-                    id_v1: self.light.as_ref().and_then(|l| l.id_v1.clone()),
+                    id_v1: None,
                     enabled: *enabled,
                     light_level: *light_level,
                     last_updated: *changed,
-                    history: self.light.as_ref().map(|l| l.history.clone()).unwrap_or_default(),
-                };
-                Self::update_history(&mut light.history, *changed, *light_level);
-                self.light = Some(light);
+                    history: Arc::new(Vec::new()),
+                });
+
+                light.enabled = *enabled;
+                light.light_level = *light_level;
+                light.last_updated = *changed;
+                Self::update_history(Arc::make_mut(&mut light.history), *changed, *light_level);
             }
             HueEvent::Raw(_) => return,
         }
@@ -96,9 +124,18 @@ impl CompositeSensor {
     pub fn fingerprint(&self) -> String {
         format!(
             "{}-{}-{}",
-            self.motion.as_ref().map(|m| m.last_updated.to_rfc3339()).unwrap_or_default(),
-            self.temperature.as_ref().map(|t| t.last_updated.to_rfc3339()).unwrap_or_default(),
-            self.light.as_ref().map(|l| l.last_updated.to_rfc3339()).unwrap_or_default(),
+            self.motion
+                .as_ref()
+                .map(|m| m.last_updated.to_rfc3339())
+                .unwrap_or_default(),
+            self.temperature
+                .as_ref()
+                .map(|t| t.last_updated.to_rfc3339())
+                .unwrap_or_default(),
+            self.light
+                .as_ref()
+                .map(|l| l.last_updated.to_rfc3339())
+                .unwrap_or_default(),
         )
     }
 

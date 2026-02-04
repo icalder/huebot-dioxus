@@ -139,7 +139,7 @@ impl ClientEx {
                             enabled: m.enabled.unwrap_or(true),
                             presence,
                             last_updated,
-                            history: vec![(last_updated, presence)],
+                            history: Arc::new(vec![(last_updated, presence)]),
                         });
                     }
                 }
@@ -163,7 +163,7 @@ impl ClientEx {
                             enabled: t.enabled.unwrap_or(true),
                             temperature,
                             last_updated,
-                            history: vec![(last_updated, temperature)],
+                            history: Arc::new(vec![(last_updated, temperature)]),
                         });
                     }
                 }
@@ -185,7 +185,7 @@ impl ClientEx {
                             enabled: l.enabled.unwrap_or(true),
                             light_level,
                             last_updated,
-                            history: vec![(last_updated, light_level)],
+                            history: Arc::new(vec![(last_updated, light_level)]),
                         });
                     }
                 }
