@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+dioxus = { version = "0.7.3", features = ["router", "fullstack"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"], optional = true }
 futures = "0.3"
 progenitor = { git = "https://github.com/oxidecomputer/progenitor" }
@@ -22,7 +22,7 @@ tokio-util = { version = "0.7.18", features = ["codec"] }
 web-sys = { version = "0.3", features = ["Window", "Document", "EventTarget", "Event"] }
 gloo-events = "0.2"
 tracing = "0.1"
-dioxus-logger = "0.7.1"
+dioxus-logger = "0.7.3"
 
 [features]
 default = ["web", "server"]
