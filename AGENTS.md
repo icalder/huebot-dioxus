@@ -296,7 +296,7 @@ The initial UI rendered by the component on the client must be identical to the 
 
 # Progenitor
 
-Progenitor is used to dynamically create a Hue APIU client from the OpenAPI spec. You can create docs including the generated structs by running `cargo doc --no-deps`. The docs are created in `target/doc/huebot`.
+Progenitor is used to dynamically create a Hue API client from the OpenAPI spec. You can create docs including the generated structs by running `cargo doc --no-deps`. The docs are created in `target/doc/huebot`.
 
 # Reliability & Performance
 
